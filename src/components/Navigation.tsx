@@ -14,6 +14,7 @@ const navItems = [
   { href: '/instruments/ritual', labelFr: 'Ritual', labelEn: 'Ritual' },
   { href: '/signal', labelFr: 'Signal', labelEn: 'Signal' },
   { href: '/instruments/synthi', labelFr: 'Synthi', labelEn: 'Synthi' },
+  { href: '/instruments/spacetime', labelFr: 'Space-Time', labelEn: 'Space-Time' },
   { href: '/patchbay', labelFr: 'Patchbay', labelEn: 'Patchbay' },
   { href: '/generative', labelFr: 'Génératif', labelEn: 'Generative' },
 ];
