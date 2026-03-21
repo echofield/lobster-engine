@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { SynthiEngine } from '@/lib/synthi-engine';
 
+type ThemeMode = 'day' | 'night';
+
 export default function SynthiPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<SynthiEngine | null>(null);
@@ -14,11 +16,30 @@ export default function SynthiPage() {
   const [analysisData, setAnalysisData] = useState<{ frequency: Uint8Array; waveform: Uint8Array } | null>(null);
   const [midiConnected, setMidiConnected] = useState(false);
   const [lastMidiNote, setLastMidiNote] = useState<number | null>(null);
+  const [themeMode, setThemeMode] = useState<ThemeMode>('day');
 
   // Parameters
   const [filterFreq, setFilterFreq] = useState(2000);
   const [filterQ, setFilterQ] = useState(5);
   const [lfo1Rate, setLfo1Rate] = useState(0.5);
+
+  // Theme colors
+  const theme = {
+    day: {
+      bg: '#FAF8F2',
+      stroke: 'rgba(26, 26, 26, 0.6)',
+      lightStroke: 'rgba(26, 26, 26, 0.15)',
+      accent: '#7C5CFF',
+      text: '#1a1a1a',
+    },
+    night: {
+      bg: '#0a0a0a',
+      stroke: 'rgba(124, 92, 255, 0.4)',
+      lightStroke: 'rgba(124, 92, 255, 0.15)',
+      accent: '#7C5CFF',
+      text: '#7C5CFF',
+    }
+  }[themeMode];
 
   const initEngine = async () => {
     if (isInitialized) return;
@@ -135,13 +156,13 @@ export default function SynthiPage() {
     const cx = w / 2;
     const cy = h / 2;
 
-    // Clear with paper background
-    ctx.fillStyle = '#FAF8F2';
+    // Clear with theme background
+    ctx.fillStyle = theme.bg;
     ctx.fillRect(0, 0, w, h);
 
-    const strokeColor = 'rgba(26, 26, 26, 0.6)';
-    const accentColor = '#7C5CFF';
-    const lightStroke = 'rgba(26, 26, 26, 0.15)';
+    const strokeColor = theme.stroke;
+    const accentColor = theme.accent;
+    const lightStroke = theme.lightStroke;
 
     ctx.strokeStyle = strokeColor;
     ctx.lineWidth = 1;
@@ -368,7 +389,7 @@ export default function SynthiPage() {
       ctx.stroke();
     });
 
-  }, [analysisData, isPlaying, mousePos]);
+  }, [analysisData, isPlaying, mousePos, theme]);
 
   useEffect(() => {
     // Start drawing loop even without audio
@@ -389,66 +410,135 @@ export default function SynthiPage() {
     return () => { engineRef.current?.dispose(); };
   }, []);
 
+  const toggleTheme = () => setThemeMode(prev => prev === 'day' ? 'night' : 'day');
+
   return (
-    <div className="min-h-screen relative overflow-hidden bg-[var(--background)]">
+    <div
+      className="min-h-screen relative overflow-hidden transition-colors duration-500"
+      style={{ background: themeMode === 'night' ? '#0a0a0a' : 'var(--background)' }}
+    >
       {/* Corner marks */}
-      <div className="corner-mark top-left" style={{ top: 24, left: 24 }} />
-      <div className="corner-mark top-right" style={{ top: 24, right: 24 }} />
-      <div className="corner-mark bottom-left" style={{ bottom: 24, left: 24 }} />
-      <div className="corner-mark bottom-right" style={{ bottom: 24, right: 24 }} />
+      <div
+        className="absolute w-3 h-3 border-l border-t transition-colors"
+        style={{ top: 24, left: 24, borderColor: themeMode === 'night' ? 'rgba(124,92,255,0.3)' : 'var(--border)' }}
+      />
+      <div
+        className="absolute w-3 h-3 border-r border-t transition-colors"
+        style={{ top: 24, right: 24, borderColor: themeMode === 'night' ? 'rgba(124,92,255,0.3)' : 'var(--border)' }}
+      />
+      <div
+        className="absolute w-3 h-3 border-l border-b transition-colors"
+        style={{ bottom: 24, left: 24, borderColor: themeMode === 'night' ? 'rgba(124,92,255,0.3)' : 'var(--border)' }}
+      />
+      <div
+        className="absolute w-3 h-3 border-r border-b transition-colors"
+        style={{ bottom: 24, right: 24, borderColor: themeMode === 'night' ? 'rgba(124,92,255,0.3)' : 'var(--border)' }}
+      />
 
       {/* Header */}
       <div className="fixed top-6 left-6 z-20">
-        <Link href="/" className="nav-link">← Home</Link>
+        <Link
+          href="/"
+          className="text-[10px] uppercase tracking-[0.15em] opacity-40 hover:opacity-100 transition-opacity"
+          style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
+        >
+          ← Home
+        </Link>
       </div>
 
       <div className="fixed top-6 right-6 z-20 flex items-center gap-4">
+        {/* Theme toggle */}
+        <button
+          onClick={toggleTheme}
+          className="text-[10px] uppercase tracking-[0.15em] opacity-40 hover:opacity-100 transition-opacity"
+          style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
+        >
+          {themeMode === 'day' ? '◐ night' : '○ day'}
+        </button>
         <div className="flex items-center gap-2">
           <div
             className="w-2 h-2 rounded-full transition-all"
             style={{
-              background: midiConnected ? 'var(--accent)' : 'var(--border-strong)',
+              background: midiConnected ? '#7C5CFF' : (themeMode === 'night' ? '#333' : 'var(--border-strong)'),
               opacity: midiConnected ? 1 : 0.3
             }}
           />
-          <span className="label-micro">{midiConnected ? 'midi' : 'no midi'}</span>
+          <span
+            className="text-[10px] uppercase tracking-[0.15em] opacity-40"
+            style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
+          >
+            {midiConnected ? 'midi' : 'no midi'}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <div
             className="w-2 h-2 rounded-full transition-all"
             style={{
-              background: isPlaying ? 'var(--accent)' : 'var(--border-strong)',
-              opacity: isPlaying ? 1 : 0.4
+              background: isPlaying ? '#7C5CFF' : (themeMode === 'night' ? '#333' : 'var(--border-strong)'),
+              opacity: isPlaying ? 1 : 0.4,
+              boxShadow: isPlaying && themeMode === 'night' ? '0 0 10px #7C5CFF' : 'none'
             }}
           />
-          <span className="label-micro">{isPlaying ? 'active' : 'idle'}</span>
+          <span
+            className="text-[10px] uppercase tracking-[0.15em] opacity-40"
+            style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
+          >
+            {isPlaying ? 'active' : 'idle'}
+          </span>
         </div>
       </div>
 
-      <div className="fixed bottom-6 left-6 build-label">SYNTHI-0321</div>
+      <div
+        className="fixed bottom-6 left-6 text-[9px] uppercase tracking-[0.15em] opacity-20"
+        style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
+      >
+        SYNTHI-0321
+      </div>
 
       {/* Main Canvas */}
       <div className="h-screen flex items-center justify-center">
         <div className="relative">
           {/* Title */}
           <div className="absolute -top-20 left-1/2 -translate-x-1/2 text-center">
-            <h1 className="text-xl font-medium tracking-[0.2em] mb-1">SYNTHI</h1>
-            <p className="label-micro opacity-30">Geometric Sound Engine</p>
+            <h1
+              className="text-xl font-medium tracking-[0.2em] mb-1"
+              style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
+            >
+              SYNTHI
+            </h1>
+            <p
+              className="text-[10px] uppercase tracking-[0.15em] opacity-30"
+              style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
+            >
+              Geometric Sound Engine
+            </p>
           </div>
 
           {/* Canvas */}
           <canvas
             ref={canvasRef}
-            className="cursor-crosshair"
-            style={{ width: 560, height: 420, background: 'var(--muted)' }}
+            className="cursor-crosshair transition-all duration-500"
+            style={{ width: 560, height: 420 }}
             onMouseMove={handleGesture}
             onClick={isInitialized ? togglePlay : initEngine}
           />
 
           {/* Init overlay */}
           {!isInitialized && (
-            <div className="absolute inset-0 flex items-center justify-center bg-[var(--background)]/80">
-              <button onClick={initEngine} className="btn-primary">
+            <div
+              className="absolute inset-0 flex items-center justify-center transition-colors duration-500"
+              style={{ background: themeMode === 'night' ? 'rgba(10,10,10,0.8)' : 'rgba(250,248,242,0.8)' }}
+            >
+              <button
+                onClick={initEngine}
+                className="px-6 py-3 border text-xs uppercase tracking-[0.2em] transition-all hover:bg-[#7C5CFF]"
+                style={{
+                  borderColor: '#7C5CFF',
+                  color: '#7C5CFF',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.color = themeMode === 'night' ? '#000' : '#fff'}
+                onMouseLeave={(e) => e.currentTarget.style.color = '#7C5CFF'}
+              >
                 Initialize Audio
               </button>
             </div>
@@ -461,9 +551,9 @@ export default function SynthiPage() {
                 onClick={togglePlay}
                 className="w-12 h-12 border rounded-full flex items-center justify-center transition-all"
                 style={{
-                  borderColor: 'var(--accent)',
-                  background: isPlaying ? 'var(--accent)' : 'transparent',
-                  color: isPlaying ? 'var(--accent-foreground)' : 'var(--accent)'
+                  borderColor: '#7C5CFF',
+                  background: isPlaying ? '#7C5CFF' : 'transparent',
+                  color: isPlaying ? (themeMode === 'night' ? '#000' : '#fff') : '#7C5CFF'
                 }}
               >
                 {isPlaying ? '■' : '▶'}
@@ -490,9 +580,14 @@ export default function SynthiPage() {
                         if (param === 'filterQ') engineRef.current?.setParam('filterQ', v);
                         if (param === 'lfo1Rate') engineRef.current?.setParam('lfo1Rate', v);
                       }}
-                      className="w-20 accent-[var(--accent)]"
+                      className="w-20 accent-[#7C5CFF]"
                     />
-                    <div className="label-micro mt-1 opacity-40">{label}</div>
+                    <div
+                      className="text-[9px] uppercase tracking-[0.1em] mt-1 opacity-40"
+                      style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
+                    >
+                      {label}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -500,8 +595,18 @@ export default function SynthiPage() {
               {/* MIDI indicator */}
               {lastMidiNote !== null && (
                 <div className="text-center">
-                  <div className="label-micro opacity-60">MIDI</div>
-                  <div className="text-sm font-mono">{lastMidiNote}</div>
+                  <div
+                    className="text-[9px] uppercase tracking-[0.1em] opacity-60"
+                    style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
+                  >
+                    MIDI
+                  </div>
+                  <div
+                    className="text-sm font-mono"
+                    style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
+                  >
+                    {lastMidiNote}
+                  </div>
                 </div>
               )}
             </div>
@@ -511,7 +616,10 @@ export default function SynthiPage() {
 
       {/* Instructions */}
       <div className="fixed bottom-6 right-6 text-right">
-        <p className="label-micro opacity-30">
+        <p
+          className="text-[9px] uppercase tracking-[0.1em] opacity-30"
+          style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
+        >
           Click to play • Mouse to modulate • MIDI supported
         </p>
       </div>
