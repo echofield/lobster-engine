@@ -3,12 +3,15 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { SynthiEngine } from '@/lib/synthi-engine';
+import { AudioRecorder, MidiClock } from '@/lib/audio-recorder';
 
 type ThemeMode = 'day' | 'night';
 
 export default function SynthiPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<SynthiEngine | null>(null);
+  const recorderRef = useRef<AudioRecorder | null>(null);
+  const midiClockRef = useRef<MidiClock | null>(null);
 
   const [isInitialized, setIsInitialized] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -19,6 +22,16 @@ export default function SynthiPage() {
   const [themeMode, setThemeMode] = useState<ThemeMode>('day');
   const [isPolyphonic, setIsPolyphonic] = useState(true);
   const [voiceCount, setVoiceCount] = useState(0);
+
+  // Recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [recordingBars, setRecordingBars] = useState(0);
+
+  // BPM/Tempo
+  const [bpm, setBpm] = useState(120);
+  const [currentBeat, setCurrentBeat] = useState(0);
+  const [currentBar, setCurrentBar] = useState(0);
 
   // Parameters
   const [filterFreq, setFilterFreq] = useState(2000);
@@ -53,6 +66,43 @@ export default function SynthiPage() {
       setIsPlaying(count > 0 || engine.getIsPlaying());
     };
     engineRef.current = engine;
+
+    // Initialize recorder - connect to engine's audio context
+    const ctx = engine['ctx'] as AudioContext;
+    if (ctx) {
+      const recorder = new AudioRecorder(ctx, { bpm });
+      const masterGain = engine['masterGain'] as GainNode;
+      if (masterGain) {
+        recorder.connectSource(masterGain);
+      }
+      recorder.onStateChange = (state) => {
+        setIsRecording(state.isRecording);
+        setRecordingTime(state.duration);
+        setRecordingBars(state.bars);
+      };
+      recorder.onRecordingComplete = async (blob, duration) => {
+        // Convert to WAV and download
+        try {
+          const wavBlob = await AudioRecorder.webmToWav(blob, ctx);
+          const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+          AudioRecorder.downloadBlob(wavBlob, `synthi-${timestamp}.wav`);
+        } catch (e) {
+          // Fallback to webm if WAV conversion fails
+          const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+          AudioRecorder.downloadBlob(blob, `synthi-${timestamp}.webm`);
+        }
+        setIsRecording(false);
+      };
+      recorderRef.current = recorder;
+
+      // Initialize MIDI clock
+      const clock = new MidiClock();
+      clock.setBPM(bpm);
+      clock.onBeatChange = setCurrentBeat;
+      clock.onBarChange = setCurrentBar;
+      midiClockRef.current = clock;
+    }
+
     setIsInitialized(true);
 
     // Initialize MIDI
@@ -119,8 +169,39 @@ export default function SynthiPage() {
       } else if (note === 123) { // All notes off
         engineRef.current?.allNotesOff();
       }
+    } else if (status >= 0xF8 && status <= 0xFC) {
+      // MIDI Clock messages
+      midiClockRef.current?.receiveMidiClock(new Uint8Array([status]));
     }
   }, []);
+
+  // Recording controls
+  const startRecording = () => {
+    if (recorderRef.current && !isRecording) {
+      recorderRef.current.setBPM(bpm);
+      recorderRef.current.start();
+    }
+  };
+
+  const stopRecording = () => {
+    if (recorderRef.current && isRecording) {
+      recorderRef.current.stop();
+    }
+  };
+
+  const recordBars = (bars: number) => {
+    if (recorderRef.current && !isRecording) {
+      recorderRef.current.setBPM(bpm);
+      recorderRef.current.startForBars(bars);
+    }
+  };
+
+  // BPM change
+  const handleBpmChange = (newBpm: number) => {
+    setBpm(newBpm);
+    recorderRef.current?.setBPM(newBpm);
+    midiClockRef.current?.setBPM(newBpm);
+  };
 
   const togglePlay = () => {
     if (!engineRef.current) return;
@@ -607,6 +688,85 @@ export default function SynthiPage() {
                 ))}
               </div>
 
+              {/* BPM Control */}
+              <div className="text-center">
+                <input
+                  type="number"
+                  min={40}
+                  max={240}
+                  value={bpm}
+                  onChange={(e) => handleBpmChange(parseInt(e.target.value) || 120)}
+                  className="w-14 h-6 bg-transparent border text-center text-xs font-mono focus:outline-none"
+                  style={{
+                    borderColor: 'rgba(124, 92, 255, 0.4)',
+                    color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)'
+                  }}
+                />
+                <div
+                  className="text-[9px] uppercase tracking-[0.1em] mt-1 opacity-40"
+                  style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
+                >
+                  BPM
+                </div>
+              </div>
+
+              {/* Record Controls */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={isRecording ? stopRecording : startRecording}
+                  className="w-10 h-10 border rounded-full flex items-center justify-center transition-all"
+                  style={{
+                    borderColor: isRecording ? '#ff4444' : '#7C5CFF',
+                    background: isRecording ? '#ff4444' : 'transparent',
+                    color: isRecording ? '#fff' : '#7C5CFF'
+                  }}
+                >
+                  {isRecording ? '■' : '●'}
+                </button>
+                <div className="flex flex-col gap-1">
+                  <div className="flex gap-1">
+                    {[1, 2, 4, 8].map((bars) => (
+                      <button
+                        key={bars}
+                        onClick={() => recordBars(bars)}
+                        disabled={isRecording}
+                        className="w-6 h-5 border text-[8px] font-mono transition-all hover:bg-[#7C5CFF] hover:text-white disabled:opacity-30"
+                        style={{
+                          borderColor: 'rgba(124, 92, 255, 0.4)',
+                          color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)'
+                        }}
+                      >
+                        {bars}
+                      </button>
+                    ))}
+                  </div>
+                  <div
+                    className="text-[8px] uppercase tracking-[0.1em] opacity-40 text-center"
+                    style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
+                  >
+                    bars
+                  </div>
+                </div>
+              </div>
+
+              {/* Recording Status */}
+              {isRecording && (
+                <div className="text-center">
+                  <div
+                    className="text-sm font-mono animate-pulse"
+                    style={{ color: '#ff4444' }}
+                  >
+                    {recordingBars}:{Math.floor(recordingTime % (60 / bpm * 4)).toString().padStart(2, '0')}
+                  </div>
+                  <div
+                    className="text-[8px] uppercase tracking-[0.1em] opacity-60"
+                    style={{ color: '#ff4444' }}
+                  >
+                    rec
+                  </div>
+                </div>
+              )}
+
               {/* MIDI indicator */}
               {lastMidiNote !== null && (
                 <div className="text-center">
@@ -635,7 +795,7 @@ export default function SynthiPage() {
           className="text-[9px] uppercase tracking-[0.1em] opacity-30"
           style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
         >
-          Click to play • Mouse to modulate • MIDI supported
+          Click to play • Mouse to modulate • MIDI + Clock sync • Record to WAV
         </p>
       </div>
     </div>
