@@ -17,6 +17,8 @@ export default function SynthiPage() {
   const [midiConnected, setMidiConnected] = useState(false);
   const [lastMidiNote, setLastMidiNote] = useState<number | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>('day');
+  const [isPolyphonic, setIsPolyphonic] = useState(true);
+  const [voiceCount, setVoiceCount] = useState(0);
 
   // Parameters
   const [filterFreq, setFilterFreq] = useState(2000);
@@ -46,6 +48,10 @@ export default function SynthiPage() {
     const engine = new SynthiEngine();
     await engine.init();
     engine.onAnalysis = setAnalysisData;
+    engine.onVoiceChange = (count) => {
+      setVoiceCount(count);
+      setIsPlaying(count > 0 || engine.getIsPlaying());
+    };
     engineRef.current = engine;
     setIsInitialized(true);
 
@@ -83,22 +89,17 @@ export default function SynthiPage() {
     const command = status & 0xf0;
 
     if (command === 0x90 && velocity > 0) {
-      // Note On
+      // Note On - use polyphonic noteOn
       setLastMidiNote(note);
       if (engineRef.current) {
-        // Map MIDI note to oscillator frequency
-        const freq = 440 * Math.pow(2, (note - 69) / 12);
-        engineRef.current.setParam('osc1Freq', freq);
-        engineRef.current.setParam('osc2Freq', freq * 1.002); // Slight detune
-        engineRef.current.setParam('osc3Freq', freq / 2); // Octave down
-
-        if (!isPlaying) {
-          engineRef.current.play();
-          setIsPlaying(true);
-        }
+        engineRef.current.noteOn(note, velocity / 127);
+        setIsPlaying(true);
       }
     } else if (command === 0x80 || (command === 0x90 && velocity === 0)) {
-      // Note Off
+      // Note Off - use polyphonic noteOff
+      if (engineRef.current) {
+        engineRef.current.noteOff(note);
+      }
       setLastMidiNote(null);
     } else if (command === 0xb0) {
       // CC
@@ -115,9 +116,11 @@ export default function SynthiPage() {
         const q = 0.5 + ccValue * 19.5;
         setFilterQ(q);
         engineRef.current?.setParam('filterQ', q);
+      } else if (note === 123) { // All notes off
+        engineRef.current?.allNotesOff();
       }
     }
-  }, [isPlaying]);
+  }, []);
 
   const togglePlay = () => {
     if (!engineRef.current) return;
@@ -455,6 +458,18 @@ export default function SynthiPage() {
         >
           {themeMode === 'day' ? '◐ night' : '○ day'}
         </button>
+        {/* Poly/Mono toggle */}
+        <button
+          onClick={() => {
+            const newMode = !isPolyphonic;
+            setIsPolyphonic(newMode);
+            engineRef.current?.setPolyphonic(newMode);
+          }}
+          className="text-[10px] uppercase tracking-[0.15em] opacity-40 hover:opacity-100 transition-opacity"
+          style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
+        >
+          {isPolyphonic ? 'poly' : 'mono'}
+        </button>
         <div className="flex items-center gap-2">
           <div
             className="w-2 h-2 rounded-full transition-all"
@@ -483,7 +498,7 @@ export default function SynthiPage() {
             className="text-[10px] uppercase tracking-[0.15em] opacity-40"
             style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
           >
-            {isPlaying ? 'active' : 'idle'}
+            {isPlaying ? (voiceCount > 0 ? `${voiceCount} voice${voiceCount > 1 ? 's' : ''}` : 'active') : 'idle'}
           </span>
         </div>
       </div>
