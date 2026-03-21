@@ -1,0 +1,57 @@
+
+> studio-intelligence@0.1.0 dev
+> next dev -p 3000 --port 4002
+
+▲ Next.js 16.2.0 (Turbopack)
+- Local:         http://localhost:4002
+- Network:       http://192.168.1.25:4002
+✓ Ready in 292ms
+
+[Middleware] CSP DISABLED - All restrictions removed
+ GET / 200 in 366ms (next.js: 150ms, proxy.ts: 86ms, application-code: 130ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /vapor 200 in 68ms (next.js: 32ms, proxy.ts: 15ms, application-code: 20ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /aether 200 in 83ms (next.js: 44ms, proxy.ts: 8ms, application-code: 31ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /chains 200 in 72ms (next.js: 44ms, proxy.ts: 7ms, application-code: 21ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /patchbay?chain=mix-analog-bus 200 in 72ms (next.js: 40ms, proxy.ts: 8ms, application-code: 24ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /gear 200 in 73ms (next.js: 41ms, proxy.ts: 8ms, application-code: 24ms)
+[Middleware] CSP DISABLED - All restrictions removed
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /gear/api-3124 200 in 1433ms (next.js: 1355ms, proxy.ts: 9ms, application-code: 68ms)
+ GET /gear/api-3124 200 in 77ms (next.js: 35ms, proxy.ts: 9ms, application-code: 33ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /generative 200 in 91ms (next.js: 54ms, proxy.ts: 6ms, application-code: 31ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /patchbay 200 in 35ms (next.js: 5ms, proxy.ts: 8ms, application-code: 22ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /signal 200 in 110ms (next.js: 51ms, proxy.ts: 8ms, application-code: 51ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /instruments/ritual 200 in 111ms (next.js: 59ms, proxy.ts: 5ms, application-code: 47ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /vapor 200 in 42ms (next.js: 7ms, proxy.ts: 7ms, application-code: 29ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /gear 200 in 27ms (next.js: 4ms, proxy.ts: 5ms, application-code: 18ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /chains 200 in 40ms (next.js: 10ms, proxy.ts: 6ms, application-code: 23ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /patchbay?chain=record-external-preamp 200 in 37ms (next.js: 6ms, proxy.ts: 6ms, application-code: 24ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /aether 200 in 30ms (next.js: 3ms, proxy.ts: 6ms, application-code: 22ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /chains 200 in 41ms (next.js: 7ms, proxy.ts: 7ms, application-code: 27ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /aether 200 in 28ms (next.js: 5ms, proxy.ts: 6ms, application-code: 18ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /vapor 200 in 37ms (next.js: 7ms, proxy.ts: 5ms, application-code: 25ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /instruments/ritual 200 in 46ms (next.js: 12ms, proxy.ts: 8ms, application-code: 27ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /vapor 200 in 39ms (next.js: 4ms, proxy.ts: 8ms, application-code: 27ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /patchbay 200 in 47ms (next.js: 2ms, proxy.ts: 5ms, application-code: 40ms)
+[Middleware] CSP DISABLED - All restrictions removed
+ GET /generative 200 in 42ms (next.js: 6ms, proxy.ts: 6ms, application-code: 30ms)

@@ -1,0 +1,10 @@
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+[browser] [LyriaStream] WebSocket error: [object Event] 
+    at LyriaStreamEngine.handleError (src/lib/lyria-stream-engine.ts:216:13)
+  214 |
+  215 |   private handleError(event: Event): void {
+> 216 |     console.error('[LyriaStream] WebSocket error:', event);
+      |             ^
+  217 |     this.setConnectionState('error');
+  218 |     this.onError?.('Connection error');
+  219 |   } (src/lib/lyria-stream-engine.ts:216:13)

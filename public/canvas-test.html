@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Canvas Test - Pure HTML</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 50px;
+            background: #FAF8F2;
+        }
+        canvas {
+            border: 3px solid purple;
+            display: block;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Pure HTML Canvas Test</h1>
+    <p>This bypasses ALL Next.js/React. If this doesn't work, it's a browser issue.</p>
+
+    <canvas id="myCanvas" width="800" height="600"></canvas>
+
+    <div id="status"></div>
+
+    <script>
+        const canvas = document.getElementById('myCanvas');
+        const status = document.getElementById('status');
+
+        if (!canvas) {
+            status.innerHTML = '<p style="color: red;">❌ Canvas element not found!</p>';
+            console.error('Canvas not found');
+        } else {
+            const ctx = canvas.getContext('2d');
+
+            if (!ctx) {
+                status.innerHTML = '<p style="color: red;">❌ Could not get 2D context!</p>';
+                console.error('Could not get 2D context');
+            } else {
+                // White background
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, 800, 600);
+
+                // Red square
+                ctx.fillStyle = 'red';
+                ctx.fillRect(50, 50, 150, 150);
+
+                // Green square
+                ctx.fillStyle = 'green';
+                ctx.fillRect(250, 50, 150, 150);
+
+                // Blue square
+                ctx.fillStyle = 'blue';
+                ctx.fillRect(450, 50, 150, 150);
+
+                // Yellow circle
+                ctx.fillStyle = 'yellow';
+                ctx.beginPath();
+                ctx.arc(400, 350, 80, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Purple text
+                ctx.fillStyle = 'purple';
+                ctx.font = 'bold 60px sans-serif';
+                ctx.fillText('CANVAS WORKS!', 150, 500);
+
+                status.innerHTML = '<p style="color: green; font-size: 20px;">✅ Canvas rendered successfully!</p>';
+                console.log('Canvas rendered successfully');
+            }
+        }
+    </script>
+</body>
+</html>
