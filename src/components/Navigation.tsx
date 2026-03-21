@@ -13,6 +13,7 @@ const navItems = [
   { href: '/vapor', labelFr: 'Vapor', labelEn: 'Vapor' },
   { href: '/instruments/ritual', labelFr: 'Ritual', labelEn: 'Ritual' },
   { href: '/signal', labelFr: 'Signal', labelEn: 'Signal' },
+  { href: '/instruments/synthi', labelFr: 'Synthi', labelEn: 'Synthi' },
   { href: '/patchbay', labelFr: 'Patchbay', labelEn: 'Patchbay' },
   { href: '/generative', labelFr: 'Génératif', labelEn: 'Generative' },
 ];
