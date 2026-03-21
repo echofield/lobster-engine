@@ -73,6 +73,10 @@ export default function AetherKeyPage() {
   const [resonanceEnergy, setResonanceEnergy] = useState(0);
   const [hoveredKey, setHoveredKey] = useState<number | null>(null);
 
+  // MIDI state
+  const [midiConnected, setMidiConnected] = useState(false);
+  const [midiDeviceName, setMidiDeviceName] = useState<string | null>(null);
+
   const accentColor = '#7C5CFF';
 
   // Key layout - curved, 24 keys spanning 2 octaves
@@ -209,6 +213,119 @@ export default function AetherKeyPage() {
     });
   }, []);
 
+  // MIDI note handlers (direct MIDI note numbers)
+  const playMidiNote = useCallback(async (midiNote: number, velocity: number) => {
+    if (!audioContextStarted.current) {
+      await Tone.start();
+      audioContextStarted.current = true;
+    }
+
+    const freq = midiToFreq(midiNote);
+    const vel = velocity / 127; // Normalize MIDI velocity
+
+    // String layer
+    if (stringLayerRef.current) {
+      stringLayerRef.current.triggerAttack(freq, Tone.now(), vel);
+    }
+
+    // Pad layer
+    if (padLayerRef.current) {
+      const padVol = -18 + (1 - tone.purity) * 12;
+      padLayerRef.current.volume.value = padVol;
+      padLayerRef.current.triggerAttack(freq, Tone.now(), vel * 0.5);
+    }
+
+    // Map MIDI note to key index for visualization
+    const keyIndex = midiNote - BASE_NOTE;
+    if (keyIndex >= 0 && keyIndex < NUM_KEYS) {
+      setActiveNotes(prev => new Set([...prev, keyIndex]));
+    }
+    setResonanceEnergy(e => Math.min(1, e + 0.2));
+  }, [tone.purity]);
+
+  const releaseMidiNote = useCallback((midiNote: number) => {
+    const freq = midiToFreq(midiNote);
+
+    stringLayerRef.current?.triggerRelease(freq);
+    padLayerRef.current?.triggerRelease(freq);
+
+    const keyIndex = midiNote - BASE_NOTE;
+    if (keyIndex >= 0 && keyIndex < NUM_KEYS) {
+      setActiveNotes(prev => {
+        const next = new Set(prev);
+        next.delete(keyIndex);
+        return next;
+      });
+    }
+  }, []);
+
+  // ============ MIDI SETUP ============
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.requestMIDIAccess) {
+      console.log('Web MIDI not supported');
+      return;
+    }
+
+    let midiAccess: MIDIAccess | null = null;
+
+    const handleMidiMessage = (event: MIDIMessageEvent) => {
+      const [status, note, velocity] = event.data || [];
+      const command = status >> 4;
+
+      // Note On (command 9) with velocity > 0
+      if (command === 9 && velocity > 0) {
+        playMidiNote(note, velocity);
+      }
+      // Note Off (command 8) or Note On with velocity 0
+      else if (command === 8 || (command === 9 && velocity === 0)) {
+        releaseMidiNote(note);
+      }
+    };
+
+    const setupMidi = (access: MIDIAccess) => {
+      midiAccess = access;
+
+      // Connect to all available inputs
+      access.inputs.forEach((input) => {
+        input.onmidimessage = handleMidiMessage;
+        setMidiConnected(true);
+        setMidiDeviceName(input.name || 'MIDI Device');
+        console.log(`MIDI connected: ${input.name}`);
+      });
+
+      // Handle device changes
+      access.onstatechange = (e) => {
+        const port = e.port;
+        if (!port) return;
+        if (port.type === 'input') {
+          if (port.state === 'connected') {
+            (port as MIDIInput).onmidimessage = handleMidiMessage;
+            setMidiConnected(true);
+            setMidiDeviceName(port.name || 'MIDI Device');
+          } else if (port.state === 'disconnected') {
+            setMidiConnected(false);
+            setMidiDeviceName(null);
+          }
+        }
+      };
+    };
+
+    navigator.requestMIDIAccess()
+      .then(setupMidi)
+      .catch((err) => {
+        console.log('MIDI access denied:', err);
+      });
+
+    return () => {
+      if (midiAccess) {
+        midiAccess.inputs.forEach((input) => {
+          input.onmidimessage = null;
+        });
+      }
+    };
+  }, [playMidiNote, releaseMidiNote]);
+
   // Decay resonance energy
   useEffect(() => {
     const decay = setInterval(() => {
@@ -331,6 +448,25 @@ export default function AetherKeyPage() {
         </a>
         <h1 className="text-2xl font-light mt-2 tracking-wider">ÆTHER.KEY</h1>
         <p className="text-[10px] text-white/30 uppercase tracking-[0.2em]">Living Harmonic Instrument</p>
+      </div>
+
+      {/* MIDI Status */}
+      <div className="absolute top-6 right-8 z-20 text-right">
+        <div className="flex items-center gap-2 justify-end">
+          <div
+            className="w-2 h-2 rounded-full"
+            style={{
+              background: midiConnected ? '#4ade80' : '#666',
+              boxShadow: midiConnected ? '0 0 8px #4ade80' : 'none',
+            }}
+          />
+          <span className="text-[10px] uppercase tracking-widest text-white/40">
+            {midiConnected ? 'MIDI' : 'No MIDI'}
+          </span>
+        </div>
+        {midiDeviceName && (
+          <p className="text-[9px] text-white/30 mt-1">{midiDeviceName}</p>
+        )}
       </div>
 
       {/* Main Instrument Body */}
