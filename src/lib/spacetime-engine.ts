@@ -121,6 +121,11 @@ export class SpaceTimeEngine {
 
   constructor() {}
 
+  // Get current location (for passing to server-side verification)
+  getLocation(): GeoLocation | null {
+    return this.currentLocation;
+  }
+
   // ============ GEOLOCATION ============
 
   async requestLocation(): Promise<GeoLocation | null> {

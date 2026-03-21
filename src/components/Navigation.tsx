@@ -15,6 +15,7 @@ const navItems = [
   { href: '/signal', labelFr: 'Signal', labelEn: 'Signal' },
   { href: '/instruments/synthi', labelFr: 'Synthi', labelEn: 'Synthi' },
   { href: '/instruments/spacetime', labelFr: 'Space-Time', labelEn: 'Space-Time' },
+  { href: '/instruments/flowkit', labelFr: 'Flow.Kit', labelEn: 'Flow.Kit' },
   { href: '/patchbay', labelFr: 'Patchbay', labelEn: 'Patchbay' },
   { href: '/generative', labelFr: 'Génératif', labelEn: 'Generative' },
 ];
