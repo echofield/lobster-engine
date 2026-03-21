@@ -25,32 +25,57 @@ interface DrumKit {
   hihat: string;
 }
 
-interface Pattern {
-  id: number;
-  name: string;
-  wave: WaveParams;
-  flow: FlowState;
+interface StepPattern {
+  kick: boolean[];
+  snare: boolean[];
+  hihat: boolean[];
 }
+
+type DrumType = 'kick' | 'snare' | 'hihat';
 
 // ============ DEFAULT PATTERNS ============
 
-const DEFAULT_PATTERNS: Pattern[] = [
-  { id: 1, name: 'HOUSE', wave: { comp: 0.6, pick: 0.25, magic: 0.2 }, flow: { energy: 0.8, density: 0.6, chaos: 0.1, humanize: 0.05 } },
-  { id: 2, name: 'TRAP', wave: { comp: 0.8, pick: 0.7, magic: 0.4 }, flow: { energy: 0.9, density: 0.4, chaos: 0.3, humanize: 0.15 } },
-  { id: 3, name: 'TECHNO', wave: { comp: 0.9, pick: 0.5, magic: 0.1 }, flow: { energy: 0.95, density: 0.7, chaos: 0.05, humanize: 0.02 } },
-  { id: 4, name: 'BROKEN', wave: { comp: 0.4, pick: 0.8, magic: 0.6 }, flow: { energy: 0.7, density: 0.5, chaos: 0.4, humanize: 0.2 } },
-  { id: 5, name: 'MINIMAL', wave: { comp: 0.3, pick: 0.3, magic: 0.1 }, flow: { energy: 0.5, density: 0.3, chaos: 0.1, humanize: 0.1 } },
-  { id: 6, name: 'GROOVE', wave: { comp: 0.5, pick: 0.4, magic: 0.3 }, flow: { energy: 0.7, density: 0.55, chaos: 0.15, humanize: 0.25 } },
-  { id: 7, name: 'ACID', wave: { comp: 0.7, pick: 0.6, magic: 0.5 }, flow: { energy: 0.85, density: 0.65, chaos: 0.2, humanize: 0.1 } },
-  { id: 8, name: 'AMBIENT', wave: { comp: 0.2, pick: 0.2, magic: 0.7 }, flow: { energy: 0.3, density: 0.2, chaos: 0.4, humanize: 0.3 } },
-  { id: 9, name: '', wave: { comp: 0.5, pick: 0.5, magic: 0.3 }, flow: { energy: 0.7, density: 0.5, chaos: 0.2, humanize: 0.1 } },
-  { id: 10, name: '', wave: { comp: 0.5, pick: 0.5, magic: 0.3 }, flow: { energy: 0.7, density: 0.5, chaos: 0.2, humanize: 0.1 } },
-  { id: 11, name: '', wave: { comp: 0.5, pick: 0.5, magic: 0.3 }, flow: { energy: 0.7, density: 0.5, chaos: 0.2, humanize: 0.1 } },
-  { id: 12, name: '', wave: { comp: 0.5, pick: 0.5, magic: 0.3 }, flow: { energy: 0.7, density: 0.5, chaos: 0.2, humanize: 0.1 } },
-  { id: 13, name: '', wave: { comp: 0.5, pick: 0.5, magic: 0.3 }, flow: { energy: 0.7, density: 0.5, chaos: 0.2, humanize: 0.1 } },
-  { id: 14, name: '', wave: { comp: 0.5, pick: 0.5, magic: 0.3 }, flow: { energy: 0.7, density: 0.5, chaos: 0.2, humanize: 0.1 } },
-  { id: 15, name: '', wave: { comp: 0.5, pick: 0.5, magic: 0.3 }, flow: { energy: 0.7, density: 0.5, chaos: 0.2, humanize: 0.1 } },
-  { id: 16, name: '', wave: { comp: 0.5, pick: 0.5, magic: 0.3 }, flow: { energy: 0.7, density: 0.5, chaos: 0.2, humanize: 0.1 } },
+const PRESET_PATTERNS: { name: string; pattern: StepPattern }[] = [
+  { name: 'FOUR', pattern: {
+    kick:  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0].map(Boolean),
+    snare: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0].map(Boolean),
+    hihat: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0].map(Boolean),
+  }},
+  { name: 'HOUSE', pattern: {
+    kick:  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0].map(Boolean),
+    snare: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0].map(Boolean),
+    hihat: [1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1].map(Boolean),
+  }},
+  { name: 'BREAK', pattern: {
+    kick:  [1,0,0,0, 0,0,1,0, 0,0,1,0, 0,0,0,0].map(Boolean),
+    snare: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,1].map(Boolean),
+    hihat: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0].map(Boolean),
+  }},
+  { name: 'TRAP', pattern: {
+    kick:  [1,0,0,0, 0,0,0,0, 1,0,1,0, 0,0,0,0].map(Boolean),
+    snare: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0].map(Boolean),
+    hihat: [1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1].map(Boolean),
+  }},
+  { name: 'TECH', pattern: {
+    kick:  [1,0,0,1, 0,0,1,0, 0,1,0,0, 1,0,0,0].map(Boolean),
+    snare: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0].map(Boolean),
+    hihat: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,1].map(Boolean),
+  }},
+  { name: 'FUNK', pattern: {
+    kick:  [1,0,0,0, 0,0,1,0, 1,0,0,0, 0,0,0,0].map(Boolean),
+    snare: [0,0,0,0, 1,0,0,1, 0,0,0,0, 1,0,0,0].map(Boolean),
+    hihat: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0].map(Boolean),
+  }},
+  { name: 'MINIMAL', pattern: {
+    kick:  [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0].map(Boolean),
+    snare: [0,0,0,0, 0,0,0,0, 0,0,0,0, 1,0,0,0].map(Boolean),
+    hihat: [0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,0].map(Boolean),
+  }},
+  { name: 'EMPTY', pattern: {
+    kick:  Array(16).fill(false),
+    snare: Array(16).fill(false),
+    hihat: Array(16).fill(false),
+  }},
 ];
 
 // ============ DRUM KITS ============
@@ -100,11 +125,22 @@ export default function FlowKitPage() {
   // Wave phase for visualization
   const [wavePhase, setWavePhase] = useState(0);
 
-  // Pattern state
-  const [patterns, setPatterns] = useState<Pattern[]>(DEFAULT_PATTERNS);
-  const [currentPattern, setCurrentPattern] = useState(1);
+  // Step sequencer state
+  const [steps, setSteps] = useState<StepPattern>({
+    kick:  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0].map(Boolean),
+    snare: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0].map(Boolean),
+    hihat: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0].map(Boolean),
+  });
+  const [selectedDrum, setSelectedDrum] = useState<DrumType>('kick');
+  const [currentStep, setCurrentStep] = useState(0);
+  const [selectedPreset, setSelectedPreset] = useState(0);
 
   const accentColor = '#7C5CFF';
+  const drumColors: Record<DrumType, string> = {
+    kick: '#ff6b6b',
+    snare: '#4ecdc4',
+    hihat: '#ffe66d',
+  };
 
   // ============ AUDIO INIT ============
 
@@ -203,43 +239,43 @@ export default function FlowKitPage() {
     Tone.Transport.swing = swing;
 
     let step = 0;
-    const stepsPerBeat = 4; // 16th notes
 
     const loop = new Tone.Loop((time) => {
-      const t = step / (stepsPerBeat * 4); // Normalize to 0-1 per bar
+      const currentSteps = steps; // Capture current state
 
       // Humanize timing
       const humanizeAmount = flow.humanize * 0.02; // Max 20ms
       const humanizeOffset = (Math.random() - 0.5) * humanizeAmount;
 
-      // Check wave for triggers
-      if (shouldTrigger(t, 'kick')) {
+      // Check step pattern for triggers
+      if (currentSteps.kick[step]) {
         synthsRef.current.kick?.triggerAttackRelease('C1', '8n', time + humanizeOffset);
         setActiveKick(true);
         setTimeout(() => setActiveKick(false), 100);
       }
 
-      if (shouldTrigger(t, 'snare')) {
+      if (currentSteps.snare[step]) {
         synthsRef.current.snare?.triggerAttackRelease('8n', time + humanizeOffset);
         setActiveSnare(true);
         setTimeout(() => setActiveSnare(false), 100);
       }
 
-      if (shouldTrigger(t, 'hihat')) {
+      if (currentSteps.hihat[step]) {
         synthsRef.current.hihat?.triggerAttackRelease('C6', '16n', time + humanizeOffset);
         setActiveHihat(true);
         setTimeout(() => setActiveHihat(false), 50);
       }
 
-      step = (step + 1) % (stepsPerBeat * 4);
-      setWavePhase(t);
+      setCurrentStep(step);
+      step = (step + 1) % 16;
+      setWavePhase(step / 16);
     }, '16n');
 
     sequenceRef.current = loop;
     loop.start(0);
     Tone.Transport.start();
     setIsPlaying(true);
-  }, [bpm, swing, flow, shouldTrigger]);
+  }, [bpm, swing, flow.humanize, steps]);
 
   const stopPlayback = useCallback(() => {
     sequenceRef.current?.stop();
@@ -262,21 +298,19 @@ export default function FlowKitPage() {
     }
   }, [swing, isPlaying]);
 
-  // Pattern selection
-  const selectPattern = useCallback((patternId: number) => {
-    // Save current settings to current pattern before switching
-    setPatterns(prev => prev.map(p =>
-      p.id === currentPattern ? { ...p, wave, flow } : p
-    ));
+  // Toggle step
+  const toggleStep = useCallback((stepIndex: number) => {
+    setSteps(prev => ({
+      ...prev,
+      [selectedDrum]: prev[selectedDrum].map((v, i) => i === stepIndex ? !v : v),
+    }));
+  }, [selectedDrum]);
 
-    // Load new pattern
-    const pattern = patterns.find(p => p.id === patternId);
-    if (pattern) {
-      setWave(pattern.wave);
-      setFlow(pattern.flow);
-      setCurrentPattern(patternId);
-    }
-  }, [currentPattern, wave, flow, patterns]);
+  // Load preset
+  const loadPreset = useCallback((presetIndex: number) => {
+    setSteps({ ...PRESET_PATTERNS[presetIndex].pattern });
+    setSelectedPreset(presetIndex);
+  }, []);
 
   // ============ WAVE VISUALIZATION ============
 
@@ -663,36 +697,84 @@ export default function FlowKitPage() {
 
       </div>
 
-      {/* Pattern Selector - TR-909 Style */}
+      {/* TR-909 Style Sequencer */}
       <div className="mt-8 border-t border-white/10 pt-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="text-xs uppercase tracking-widest text-white/40">PATTERN</div>
-          <div className="text-xs text-white/30">
-            {patterns.find(p => p.id === currentPattern)?.name || `PATTERN ${currentPattern}`}
+        {/* Instrument Selector */}
+        <div className="flex items-center gap-4 mb-6">
+          <div className="text-xs uppercase tracking-widest text-white/40">INST</div>
+          <div className="flex gap-2">
+            {(['kick', 'snare', 'hihat'] as DrumType[]).map((drum) => (
+              <button
+                key={drum}
+                onClick={() => setSelectedDrum(drum)}
+                className="px-6 py-3 border-2 text-xs uppercase tracking-widest transition-all"
+                style={{
+                  borderColor: selectedDrum === drum ? drumColors[drum] : '#333',
+                  background: selectedDrum === drum ? `${drumColors[drum]}20` : 'transparent',
+                  color: selectedDrum === drum ? drumColors[drum] : '#666',
+                }}
+              >
+                {drum === 'kick' ? 'BD' : drum === 'snare' ? 'SD' : 'HH'}
+              </button>
+            ))}
+          </div>
+
+          <div className="ml-auto flex items-center gap-4">
+            <div className="text-xs uppercase tracking-widest text-white/40">PATTERN</div>
+            <div className="flex gap-1">
+              {PRESET_PATTERNS.map((preset, i) => (
+                <button
+                  key={preset.name}
+                  onClick={() => loadPreset(i)}
+                  className="px-3 py-2 border text-[10px] uppercase tracking-widest transition-all"
+                  style={{
+                    borderColor: selectedPreset === i ? accentColor : '#333',
+                    background: selectedPreset === i ? `${accentColor}20` : 'transparent',
+                    color: selectedPreset === i ? accentColor : '#666',
+                  }}
+                >
+                  {preset.name}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* 16 Step Buttons */}
         <div className="flex gap-2">
-          {patterns.map((pattern) => (
-            <button
-              key={pattern.id}
-              onClick={() => selectPattern(pattern.id)}
-              className="flex-1 aspect-square border-2 flex items-center justify-center text-sm font-mono transition-all hover:scale-105"
-              style={{
-                borderColor: currentPattern === pattern.id ? accentColor : pattern.name ? '#444' : '#222',
-                background: currentPattern === pattern.id ? `${accentColor}20` : 'transparent',
-                color: currentPattern === pattern.id ? accentColor : pattern.name ? '#888' : '#444',
-              }}
-            >
-              {pattern.id}
-            </button>
-          ))}
+          {Array.from({ length: 16 }, (_, i) => {
+            const isActive = steps[selectedDrum][i];
+            const isCurrentStep = isPlaying && currentStep === i;
+            const isBeat = i % 4 === 0;
+
+            return (
+              <button
+                key={i}
+                onClick={() => toggleStep(i)}
+                className="flex-1 aspect-square border-2 flex items-center justify-center text-sm font-mono transition-all relative"
+                style={{
+                  borderColor: isCurrentStep ? '#fff' : isActive ? drumColors[selectedDrum] : isBeat ? '#444' : '#222',
+                  background: isActive ? `${drumColors[selectedDrum]}${isCurrentStep ? '80' : '40'}` : isCurrentStep ? 'rgba(255,255,255,0.1)' : 'transparent',
+                  color: isActive ? drumColors[selectedDrum] : isBeat ? '#666' : '#333',
+                }}
+              >
+                {i + 1}
+                {/* Playhead indicator */}
+                {isCurrentStep && (
+                  <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-white" />
+                )}
+              </button>
+            );
+          })}
         </div>
-        {/* Pattern Group Labels */}
-        <div className="flex mt-2 text-[9px] uppercase tracking-widest text-white/20">
-          <div className="flex-1 text-center">1-4</div>
-          <div className="flex-1 text-center">5-8</div>
-          <div className="flex-1 text-center">9-12</div>
-          <div className="flex-1 text-center">13-16</div>
+
+        {/* Beat markers */}
+        <div className="flex mt-2">
+          {[1, 2, 3, 4].map((beat) => (
+            <div key={beat} className="flex-1 text-center text-[9px] uppercase tracking-widest text-white/20">
+              {beat}
+            </div>
+          ))}
         </div>
       </div>
 
