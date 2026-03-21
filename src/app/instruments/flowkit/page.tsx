@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import * as Tone from 'tone';
+import { subscribeToFlowState, mapToFlowKit, getFlowState, type FlowMindState } from '@/lib/flow-state';
 
 // ============ TYPES ============
 
@@ -135,6 +136,10 @@ export default function FlowKitPage() {
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedPreset, setSelectedPreset] = useState(0);
 
+  // FLOW.MIND connection state
+  const [flowMindActive, setFlowMindActive] = useState(false);
+  const [flowMindStyle, setFlowMindStyle] = useState<string>('');
+
   const accentColor = '#7C5CFF';
   const drumColors: Record<DrumType, string> = {
     kick: '#ff6b6b',
@@ -188,6 +193,54 @@ export default function FlowKitPage() {
       snare.dispose();
       hihat.dispose();
     };
+  }, []);
+
+  // ============ FLOW.MIND SUBSCRIPTION ============
+
+  useEffect(() => {
+    // Check initial state
+    const initialState = getFlowState();
+    if (initialState.active && Date.now() - initialState.timestamp < 30000) {
+      const params = mapToFlowKit(initialState);
+      setBpm(params.bpm);
+      setSwing(params.swing);
+      setFlow(f => ({
+        ...f,
+        energy: params.energy,
+        density: params.density,
+        chaos: params.chaos,
+        humanize: params.humanize,
+      }));
+      setFlowMindActive(true);
+      setFlowMindStyle(initialState.mode.style.toUpperCase());
+    }
+
+    // Subscribe to state changes from FLOW.MIND
+    const unsubscribe = subscribeToFlowState((state: FlowMindState) => {
+      if (!state.active) {
+        setFlowMindActive(false);
+        return;
+      }
+
+      // Map FLOW.MIND state to FLOW.KIT parameters
+      const params = mapToFlowKit(state);
+
+      // Apply the mapped parameters
+      setBpm(params.bpm);
+      setSwing(params.swing);
+      setFlow(f => ({
+        ...f,
+        energy: params.energy,
+        density: params.density,
+        chaos: params.chaos,
+        humanize: params.humanize,
+      }));
+
+      setFlowMindActive(true);
+      setFlowMindStyle(state.mode.style.toUpperCase());
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // ============ WAVE RHYTHM GENERATOR ============
@@ -398,6 +451,17 @@ export default function FlowKitPage() {
           <h1 className="text-2xl font-light mt-2">FLOW.KIT</h1>
           <p className="text-xs text-white/30 uppercase tracking-widest">Wave Rhythm Engine</p>
         </div>
+
+        {/* FLOW.MIND Connection Status */}
+        {flowMindActive && (
+          <div className="flex items-center gap-3 px-4 py-2 border border-[#7C5CFF]/50 bg-[#7C5CFF]/10 rounded">
+            <div className="w-2 h-2 rounded-full bg-[#7C5CFF] animate-pulse" />
+            <span className="text-[10px] uppercase tracking-widest text-[#7C5CFF]">
+              FLOW.MIND · {flowMindStyle}
+            </span>
+          </div>
+        )}
+
         <button
           onClick={isPlaying ? stopPlayback : startPlayback}
           className="w-16 h-16 rounded-full border-2 flex items-center justify-center text-2xl transition-all hover:scale-105"

@@ -1,32 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import {
+  setFlowState,
+  DEFAULT_FLOW_STATE,
+  type Style,
+  type Mood,
+  type ModeState,
+  type TransformState,
+  type OutputState,
+} from '@/lib/flow-state';
 
 // ============ TYPES ============
-
-type Style = 'ambient' | 'techno' | 'broken' | 'cinematic' | 'minimal' | 'chaos';
-type Mood = 'dark' | 'light' | 'tense' | 'euphoric' | 'neutral';
-
-interface ModeState {
-  style: Style;
-  mood: Mood;
-  energy: number;      // 0-1
-  complexity: number;  // 0-1
-}
-
-interface TransformState {
-  chaos: number;       // 0-1: randomness injection
-  warp: number;        // 0-1: time stretching
-  crush: number;       // 0-1: bit crush / distortion
-  morph: number;       // 0-1: harmonic morphing
-}
-
-interface OutputState {
-  intensity: number;   // 0-1: overall power
-  width: number;       // 0-1: stereo spread
-  direction: number;   // -1 to 1: backward to forward
-  focus: number;       // 0-1: narrow to wide
-}
 
 interface ListeningState {
   rhythm: number;      // detected rhythm density
@@ -91,6 +76,19 @@ export default function FlowMindPage() {
     }, 100);
     return () => clearInterval(interval);
   }, [mode.energy, transform.chaos]);
+
+  // ============ BROADCAST STATE TO ALL INSTRUMENTS ============
+
+  useEffect(() => {
+    // Broadcast state changes to connected instruments
+    setFlowState({
+      mode,
+      transform,
+      output,
+      timestamp: Date.now(),
+      active: true,
+    });
+  }, [mode, transform, output]);
 
   // ============ CANVAS VISUALIZATION ============
 

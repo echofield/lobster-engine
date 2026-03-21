@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import * as Tone from 'tone';
+import { subscribeToFlowState, mapToAetherKey, getFlowState, type FlowMindState } from '@/lib/flow-state';
 
 // ============ TYPES ============
 
@@ -67,6 +68,10 @@ export default function AetherKeyPage() {
     drift: 0.1,
     instability: 0.05,
   });
+
+  // FLOW.MIND connection state
+  const [flowMindActive, setFlowMindActive] = useState(false);
+  const [flowMindMood, setFlowMindMood] = useState<string>('');
 
   // Active notes and visualization
   const [activeNotes, setActiveNotes] = useState<Set<number>>(new Set());
@@ -166,6 +171,52 @@ export default function AetherKeyPage() {
       chorusRef.current.wet.value = resonance.width * 0.5;
     }
   }, [resonance, modulation]);
+
+  // ============ FLOW.MIND SUBSCRIPTION ============
+
+  useEffect(() => {
+    // Check initial state
+    const initialState = getFlowState();
+    if (initialState.active && Date.now() - initialState.timestamp < 30000) {
+      const params = mapToAetherKey(initialState);
+      setTone(params.tone);
+      setExcitation(e => ({
+        ...e,
+        attack: params.excitation.attack,
+        intensity: params.excitation.intensity,
+      }));
+      setResonance(params.resonance);
+      setModulation(params.modulation);
+      setFlowMindActive(true);
+      setFlowMindMood(initialState.mode.mood.toUpperCase());
+    }
+
+    // Subscribe to state changes from FLOW.MIND
+    const unsubscribe = subscribeToFlowState((state: FlowMindState) => {
+      if (!state.active) {
+        setFlowMindActive(false);
+        return;
+      }
+
+      // Map FLOW.MIND state to ÆTHER.KEY parameters
+      const params = mapToAetherKey(state);
+
+      // Apply the mapped parameters
+      setTone(params.tone);
+      setExcitation(e => ({
+        ...e,
+        attack: params.excitation.attack,
+        intensity: params.excitation.intensity,
+      }));
+      setResonance(params.resonance);
+      setModulation(params.modulation);
+
+      setFlowMindActive(true);
+      setFlowMindMood(state.mode.mood.toUpperCase());
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // ============ NOTE HANDLING ============
 
@@ -450,8 +501,19 @@ export default function AetherKeyPage() {
         <p className="text-[10px] text-white/30 uppercase tracking-[0.2em]">Living Harmonic Instrument</p>
       </div>
 
-      {/* MIDI Status */}
-      <div className="absolute top-6 right-8 z-20 text-right">
+      {/* Status Indicators */}
+      <div className="absolute top-6 right-8 z-20 text-right space-y-3">
+        {/* FLOW.MIND Status */}
+        {flowMindActive && (
+          <div className="flex items-center gap-2 justify-end px-3 py-1.5 border border-[#7C5CFF]/50 bg-[#7C5CFF]/10 rounded">
+            <div className="w-2 h-2 rounded-full bg-[#7C5CFF] animate-pulse" />
+            <span className="text-[10px] uppercase tracking-widest text-[#7C5CFF]">
+              FLOW.MIND · {flowMindMood}
+            </span>
+          </div>
+        )}
+
+        {/* MIDI Status */}
         <div className="flex items-center gap-2 justify-end">
           <div
             className="w-2 h-2 rounded-full"
