@@ -45,7 +45,7 @@ export default function RitualInstrumentPage() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [currentMode, setCurrentMode] = useState<RitualMode>('IONIC');
   const [modulationParams, setModulationParams] = useState<ModulationParams | null>(null);
-  const [connectionState, setConnectionState] = useState<'disconnected' | 'connecting' | 'connected' | 'streaming'>('disconnected');
+  const [connectionState, setConnectionState] = useState<'disconnected' | 'connecting' | 'connected' | 'streaming' | 'error'>('disconnected');
   const [bufferHealth, setBufferHealth] = useState(0);
 
   // Initialize audio engines
@@ -180,6 +180,7 @@ export default function RitualInstrumentPage() {
                   connectionState === 'streaming' ? 'bg-green-500' :
                   connectionState === 'connected' ? 'bg-blue-500' :
                   connectionState === 'connecting' ? 'bg-yellow-500' :
+                  connectionState === 'error' ? 'bg-red-500' :
                   'bg-gray-500'
                 }`} />
                 <span className="font-mono text-sm uppercase">{connectionState}</span>
