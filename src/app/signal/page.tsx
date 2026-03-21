@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { SignalEngine } from '@/lib/signal-engine';
 import { LyriaStreamEngine } from '@/lib/lyria-stream-engine';
 import { FieldRenderer } from '@/lib/field-renderer';
+import { AudioRecorder, MidiClock } from '@/lib/audio-recorder';
 import type { Scale, SignalVoiceType, LyriaMood, VisualizationMode } from '@/types/signal';
 
 export default function SignalFieldPage() {
@@ -12,10 +13,18 @@ export default function SignalFieldPage() {
   const signalEngineRef = useRef<SignalEngine | null>(null);
   const lyriaEngineRef = useRef<LyriaStreamEngine | null>(null);
   const rendererRef = useRef<FieldRenderer | null>(null);
+  const recorderRef = useRef<AudioRecorder | null>(null);
+  const midiClockRef = useRef<MidiClock | null>(null);
 
   const [isInitialized, setIsInitialized] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeVoiceCount, setActiveVoiceCount] = useState(0);
+
+  // Recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [recordingBars, setRecordingBars] = useState(0);
+  const [bpm, setBpm] = useState(120);
 
   const [scale, setScale] = useState<Scale>('pentatonic');
   const [root, setRoot] = useState(60);
@@ -46,9 +55,37 @@ export default function SignalFieldPage() {
         rendererRef.current = renderer;
 
         const lyriaEngine = new LyriaStreamEngine();
-        await lyriaEngine.init(signalEngine.isReady() ? signalEngine['ctx']! : new AudioContext());
+        const ctx = signalEngine.isReady() ? signalEngine['ctx']! : new AudioContext();
+        await lyriaEngine.init(ctx);
         lyriaEngine.onConnectionStateChange = (state) => setLyriaConnected(state === 'connected' || state === 'streaming');
         lyriaEngineRef.current = lyriaEngine;
+
+        // Initialize recorder
+        const recorder = new AudioRecorder(ctx, { bpm: 120 });
+        const masterGain = signalEngine['masterGain'] as GainNode;
+        if (masterGain) recorder.connectSource(masterGain);
+        recorder.onStateChange = (state) => {
+          setIsRecording(state.isRecording);
+          setRecordingTime(state.duration);
+          setRecordingBars(state.bars);
+        };
+        recorder.onRecordingComplete = async (blob) => {
+          try {
+            const wavBlob = await AudioRecorder.webmToWav(blob, ctx);
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+            AudioRecorder.downloadBlob(wavBlob, `signal-${timestamp}.wav`);
+          } catch {
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+            AudioRecorder.downloadBlob(blob, `signal-${timestamp}.webm`);
+          }
+          setIsRecording(false);
+        };
+        recorderRef.current = recorder;
+
+        // Initialize MIDI clock
+        const clock = new MidiClock();
+        clock.setBPM(120);
+        midiClockRef.current = clock;
 
         setIsInitialized(true);
       } catch (error) { console.error('[SIGNAL/FIELD] Initialization failed:', error); }
@@ -92,6 +129,33 @@ export default function SignalFieldPage() {
     if (lyriaEnabled) { lyriaEngineRef.current.disconnect(); setLyriaEnabled(false); }
     else { await lyriaEngineRef.current.connect(); setLyriaEnabled(true); }
   }, [lyriaEnabled]);
+
+  // Recording controls
+  const startRecording = useCallback(() => {
+    if (recorderRef.current && !isRecording) {
+      recorderRef.current.setBPM(bpm);
+      recorderRef.current.start();
+    }
+  }, [isRecording, bpm]);
+
+  const stopRecording = useCallback(() => {
+    if (recorderRef.current && isRecording) {
+      recorderRef.current.stop();
+    }
+  }, [isRecording]);
+
+  const recordBars = useCallback((bars: number) => {
+    if (recorderRef.current && !isRecording) {
+      recorderRef.current.setBPM(bpm);
+      recorderRef.current.startForBars(bars);
+    }
+  }, [isRecording, bpm]);
+
+  const handleBpmChange = useCallback((newBpm: number) => {
+    setBpm(newBpm);
+    recorderRef.current?.setBPM(newBpm);
+    midiClockRef.current?.setBPM(newBpm);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -273,6 +337,58 @@ export default function SignalFieldPage() {
               <option value="resonance_bloom">Resonance Bloom</option>
               <option value="hybrid">Hybrid</option>
             </select>
+          </div>
+        </section>
+
+        {/* Recording Layer */}
+        <section>
+          <h3 className="label-micro opacity-40 mb-4">Recording</h3>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                min={40}
+                max={240}
+                value={bpm}
+                onChange={(e) => handleBpmChange(parseInt(e.target.value) || 120)}
+                className="w-16 h-8 bg-transparent border border-[var(--border)] text-center text-xs font-mono focus:outline-none focus:border-[var(--accent)]"
+              />
+              <span className="label-micro opacity-40">BPM</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={isRecording ? stopRecording : startRecording}
+                className="w-10 h-10 border rounded-full flex items-center justify-center transition-all"
+                style={{
+                  borderColor: isRecording ? '#ff4444' : 'var(--accent)',
+                  background: isRecording ? '#ff4444' : 'transparent',
+                  color: isRecording ? '#fff' : 'var(--accent)'
+                }}
+              >
+                {isRecording ? '■' : '●'}
+              </button>
+              <div className="flex flex-col gap-1">
+                <div className="flex gap-1">
+                  {[1, 2, 4, 8].map((bars) => (
+                    <button
+                      key={bars}
+                      onClick={() => recordBars(bars)}
+                      disabled={isRecording}
+                      className="w-7 h-6 border text-[9px] font-mono transition-all hover:bg-[var(--accent)] hover:text-white disabled:opacity-30"
+                      style={{ borderColor: 'var(--border)' }}
+                    >
+                      {bars}
+                    </button>
+                  ))}
+                </div>
+                <span className="label-micro opacity-40 text-center">bars</span>
+              </div>
+            </div>
+            {isRecording && (
+              <div className="text-sm font-mono animate-pulse" style={{ color: '#ff4444' }}>
+                REC {recordingBars}:{Math.floor(recordingTime % (60 / bpm * 4)).toString().padStart(2, '0')}
+              </div>
+            )}
           </div>
         </section>
 

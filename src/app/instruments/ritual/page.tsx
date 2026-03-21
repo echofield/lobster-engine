@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { LyriaStreamEngine } from '@/lib/lyria-stream-engine';
 import { AetherEngine } from '@/lib/aether-engine';
+import { AudioRecorder, MidiClock } from '@/lib/audio-recorder';
 
 type RitualMode = 'IONIC' | 'RADIANT' | 'VORTEX' | 'ETHER';
 
@@ -18,12 +19,20 @@ export default function RitualInstrumentPage() {
   const aetherRef = useRef<AetherEngine | null>(null);
   const lyriaRef = useRef<LyriaStreamEngine | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const recorderRef = useRef<AudioRecorder | null>(null);
+  const midiClockRef = useRef<MidiClock | null>(null);
 
   const [isInitialized, setIsInitialized] = useState(false);
   const [currentMode, setCurrentMode] = useState<RitualMode>('IONIC');
   const [connectionState, setConnectionState] = useState<'disconnected' | 'connecting' | 'connected' | 'streaming' | 'error'>('disconnected');
   const [bufferHealth, setBufferHealth] = useState(0);
   const [activeNotes, setActiveNotes] = useState<Set<number>>(new Set());
+
+  // Recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [recordingBars, setRecordingBars] = useState(0);
+  const [bpm, setBpm] = useState(120);
 
   const initEngines = async () => {
     if (isInitialized) return;
@@ -43,6 +52,33 @@ export default function RitualInstrumentPage() {
       lyria.onBufferHealth = (health) => setBufferHealth(health);
       lyria.onError = (error) => console.error('[Ritual] Lyria error:', error);
       lyriaRef.current = lyria;
+
+      // Initialize recorder
+      const recorder = new AudioRecorder(ctx, { bpm });
+      const masterGain = aether['masterGain'] as GainNode;
+      if (masterGain) recorder.connectSource(masterGain);
+      recorder.onStateChange = (state) => {
+        setIsRecording(state.isRecording);
+        setRecordingTime(state.duration);
+        setRecordingBars(state.bars);
+      };
+      recorder.onRecordingComplete = async (blob) => {
+        try {
+          const wavBlob = await AudioRecorder.webmToWav(blob, ctx);
+          const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+          AudioRecorder.downloadBlob(wavBlob, `ritual-${currentMode.toLowerCase()}-${timestamp}.wav`);
+        } catch {
+          const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+          AudioRecorder.downloadBlob(blob, `ritual-${currentMode.toLowerCase()}-${timestamp}.webm`);
+        }
+        setIsRecording(false);
+      };
+      recorderRef.current = recorder;
+
+      // Initialize MIDI clock
+      const clock = new MidiClock();
+      clock.setBPM(bpm);
+      midiClockRef.current = clock;
 
       setIsInitialized(true);
     } catch (error) {
@@ -72,6 +108,33 @@ export default function RitualInstrumentPage() {
   const releaseNote = (i: number) => {
     setActiveNotes(prev => { const n = new Set(prev); n.delete(i); return n; });
     aetherRef.current?.releaseNote(i);
+  };
+
+  // Recording controls
+  const startRecording = () => {
+    if (recorderRef.current && !isRecording) {
+      recorderRef.current.setBPM(bpm);
+      recorderRef.current.start();
+    }
+  };
+
+  const stopRecording = () => {
+    if (recorderRef.current && isRecording) {
+      recorderRef.current.stop();
+    }
+  };
+
+  const recordBars = (bars: number) => {
+    if (recorderRef.current && !isRecording) {
+      recorderRef.current.setBPM(bpm);
+      recorderRef.current.startForBars(bars);
+    }
+  };
+
+  const handleBpmChange = (newBpm: number) => {
+    setBpm(newBpm);
+    recorderRef.current?.setBPM(newBpm);
+    midiClockRef.current?.setBPM(newBpm);
   };
 
   useEffect(() => {
@@ -184,6 +247,53 @@ export default function RitualInstrumentPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Recording Controls */}
+                <div>
+                  <div className="label-micro mb-3 opacity-40">Record</div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={40}
+                        max={240}
+                        value={bpm}
+                        onChange={(e) => handleBpmChange(parseInt(e.target.value) || 120)}
+                        className="w-14 h-7 bg-transparent border border-[var(--border)] text-center text-xs font-mono focus:outline-none focus:border-[var(--accent)]"
+                      />
+                      <span className="label-micro opacity-40">BPM</span>
+                    </div>
+                    <button
+                      onClick={isRecording ? stopRecording : startRecording}
+                      className="w-8 h-8 border rounded-full flex items-center justify-center transition-all"
+                      style={{
+                        borderColor: isRecording ? '#ff4444' : 'var(--accent)',
+                        background: isRecording ? '#ff4444' : 'transparent',
+                        color: isRecording ? '#fff' : 'var(--accent)'
+                      }}
+                    >
+                      {isRecording ? '■' : '●'}
+                    </button>
+                    <div className="flex gap-1">
+                      {[1, 2, 4, 8].map((bars) => (
+                        <button
+                          key={bars}
+                          onClick={() => recordBars(bars)}
+                          disabled={isRecording}
+                          className="w-6 h-6 border text-[9px] font-mono transition-all hover:bg-[var(--accent)] hover:text-white disabled:opacity-30"
+                          style={{ borderColor: 'var(--border)' }}
+                        >
+                          {bars}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {isRecording && (
+                    <div className="mt-2 text-xs font-mono animate-pulse" style={{ color: '#ff4444' }}>
+                      REC {recordingBars}:{Math.floor(recordingTime % (60 / bpm * 4)).toString().padStart(2, '0')}
+                    </div>
+                  )}
+                </div>
 
                 {connectionState === 'disconnected' && (
                   <button onClick={connectToBackend} className="btn-outline w-full">Connect to Lyria</button>
