@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { SynthiEngine } from '@/lib/synthi-engine';
 import { AudioRecorder, MidiClock } from '@/lib/audio-recorder';
+import { SpaceTimeEngine, SpaceTimeConditions, ConditionResult } from '@/lib/spacetime-engine';
 
 type ThemeMode = 'day' | 'night';
 
@@ -12,6 +13,7 @@ export default function SynthiPage() {
   const engineRef = useRef<SynthiEngine | null>(null);
   const recorderRef = useRef<AudioRecorder | null>(null);
   const midiClockRef = useRef<MidiClock | null>(null);
+  const spaceTimeRef = useRef<SpaceTimeEngine | null>(null);
 
   const [isInitialized, setIsInitialized] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -37,6 +39,13 @@ export default function SynthiPage() {
   const [filterFreq, setFilterFreq] = useState(2000);
   const [filterQ, setFilterQ] = useState(5);
   const [lfo1Rate, setLfo1Rate] = useState(0.5);
+
+  // Space-Time
+  const [spaceTimeEnabled, setSpaceTimeEnabled] = useState(false);
+  const [spaceTimeConditions, setSpaceTimeConditions] = useState<SpaceTimeConditions | null>(null);
+  const [spaceTimeResult, setSpaceTimeResult] = useState<ConditionResult | null>(null);
+  const [showConditionEditor, setShowConditionEditor] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState<string>('');
 
   // Theme colors
   const theme = {
@@ -101,6 +110,17 @@ export default function SynthiPage() {
       clock.onBeatChange = setCurrentBeat;
       clock.onBarChange = setCurrentBar;
       midiClockRef.current = clock;
+
+      // Initialize Space-Time engine
+      const spaceTime = new SpaceTimeEngine();
+      spaceTime.onLocationChange = () => {
+        // Re-evaluate conditions when location changes
+        if (spaceTimeConditions) {
+          const result = spaceTime.evaluate(spaceTimeConditions);
+          setSpaceTimeResult(result);
+        }
+      };
+      spaceTimeRef.current = spaceTime;
     }
 
     setIsInitialized(true);
@@ -202,6 +222,91 @@ export default function SynthiPage() {
     recorderRef.current?.setBPM(newBpm);
     midiClockRef.current?.setBPM(newBpm);
   };
+
+  // Space-Time controls
+  const selectSpaceTimePreset = async (presetName: string) => {
+    if (!spaceTimeRef.current) return;
+    setSelectedPreset(presetName);
+
+    const presets: Record<string, () => SpaceTimeConditions> = {
+      'full-moon': SpaceTimeEngine.presets.fullMoonOnly,
+      'tokyo-nights': SpaceTimeEngine.presets.tokyoNights,
+      'winter-solstice': SpaceTimeEngine.presets.winterSolstice,
+      'midnight': SpaceTimeEngine.presets.midnightGlobal,
+      'summer-paris': SpaceTimeEngine.presets.summerParis,
+      'evolving-moon': SpaceTimeEngine.presets.evolvingMoon,
+    };
+
+    const preset = presets[presetName];
+    if (preset) {
+      const conditions = preset();
+      setSpaceTimeConditions(conditions);
+
+      // Request location if needed
+      if (conditions.space.type !== 'anywhere') {
+        await spaceTimeRef.current.requestLocation();
+      }
+
+      // Evaluate conditions
+      const result = spaceTimeRef.current.evaluate(conditions);
+      setSpaceTimeResult(result);
+
+      // Apply evolution values to synth parameters
+      if (result.evolutionValues) {
+        applyEvolutionValues(result.evolutionValues);
+      }
+    }
+  };
+
+  const applyEvolutionValues = (values: Record<string, number>) => {
+    if (!engineRef.current) return;
+    for (const [param, value] of Object.entries(values)) {
+      if (param === 'filterFreq') {
+        setFilterFreq(value);
+        engineRef.current.setParam('filterFreq', value);
+      } else if (param === 'filterQ') {
+        setFilterQ(value);
+        engineRef.current.setParam('filterQ', value);
+      } else if (param === 'lfo1Rate') {
+        setLfo1Rate(value);
+        engineRef.current.setParam('lfo1Rate', value);
+      }
+    }
+  };
+
+  const toggleSpaceTime = async () => {
+    const newEnabled = !spaceTimeEnabled;
+    setSpaceTimeEnabled(newEnabled);
+
+    if (newEnabled && spaceTimeRef.current) {
+      // Request location on enable
+      await spaceTimeRef.current.requestLocation();
+      spaceTimeRef.current.watchLocation();
+
+      // Evaluate current conditions
+      if (spaceTimeConditions) {
+        const result = spaceTimeRef.current.evaluate(spaceTimeConditions);
+        setSpaceTimeResult(result);
+      }
+    } else if (spaceTimeRef.current) {
+      spaceTimeRef.current.stopWatchingLocation();
+    }
+  };
+
+  // Update evolution values periodically when SpaceTime is enabled
+  useEffect(() => {
+    if (!spaceTimeEnabled || !spaceTimeConditions?.evolution || !spaceTimeRef.current) return;
+
+    const interval = setInterval(() => {
+      const result = spaceTimeRef.current!.evaluate(spaceTimeConditions);
+      setSpaceTimeResult(result);
+      if (result.evolutionValues) {
+        applyEvolutionValues(result.evolutionValues);
+      }
+    }, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, [spaceTimeEnabled, spaceTimeConditions]);
 
   const togglePlay = () => {
     if (!engineRef.current) return;
@@ -551,6 +656,17 @@ export default function SynthiPage() {
         >
           {isPolyphonic ? 'poly' : 'mono'}
         </button>
+        {/* Space-Time toggle */}
+        <button
+          onClick={toggleSpaceTime}
+          className="text-[10px] uppercase tracking-[0.15em] transition-opacity"
+          style={{
+            color: spaceTimeEnabled ? '#00ff88' : (themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)'),
+            opacity: spaceTimeEnabled ? 1 : 0.4
+          }}
+        >
+          {spaceTimeEnabled ? '◉ ST' : '○ ST'}
+        </button>
         <div className="flex items-center gap-2">
           <div
             className="w-2 h-2 rounded-full transition-all"
@@ -590,6 +706,107 @@ export default function SynthiPage() {
       >
         SYNTHI-0321
       </div>
+
+      {/* Space-Time Panel */}
+      {spaceTimeEnabled && (
+        <div
+          className="fixed left-6 top-20 w-56 p-4 border transition-all z-30"
+          style={{
+            background: themeMode === 'night' ? 'rgba(10,10,10,0.95)' : 'rgba(250,248,242,0.95)',
+            borderColor: spaceTimeResult?.allowed ? '#00ff88' : '#ff4444'
+          }}
+        >
+          <div className="text-[10px] uppercase tracking-[0.15em] mb-3 flex items-center gap-2" style={{ color: '#00ff88' }}>
+            <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
+            Space-Time
+          </div>
+
+          {/* Preset selector */}
+          <div className="mb-4">
+            <div className="text-[9px] uppercase tracking-[0.1em] opacity-40 mb-2" style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}>
+              Condition Preset
+            </div>
+            <select
+              value={selectedPreset}
+              onChange={(e) => selectSpaceTimePreset(e.target.value)}
+              className="w-full bg-transparent border px-2 py-1.5 text-[10px] focus:outline-none"
+              style={{
+                borderColor: 'rgba(124, 92, 255, 0.3)',
+                color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)'
+              }}
+            >
+              <option value="">Select...</option>
+              <option value="full-moon">Full Moon Only</option>
+              <option value="tokyo-nights">Tokyo Nights</option>
+              <option value="midnight">Midnight Hour</option>
+              <option value="summer-paris">Paris Summer</option>
+              <option value="winter-solstice">Winter Solstice</option>
+              <option value="evolving-moon">Evolving Moon</option>
+            </select>
+          </div>
+
+          {/* Current conditions */}
+          {spaceTimeConditions && (
+            <div className="mb-4">
+              <div className="text-[9px] uppercase tracking-[0.1em] opacity-40 mb-2" style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}>
+                {spaceTimeConditions.name}
+              </div>
+              <div className="text-[9px] opacity-60" style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}>
+                {spaceTimeConditions.description}
+              </div>
+            </div>
+          )}
+
+          {/* Status */}
+          {spaceTimeResult && (
+            <div className="space-y-2">
+              <div
+                className="text-[10px] uppercase tracking-[0.1em] font-medium"
+                style={{ color: spaceTimeResult.allowed ? '#00ff88' : '#ff4444' }}
+              >
+                {spaceTimeResult.allowed ? '● Unlocked' : '○ Locked'}
+              </div>
+
+              {!spaceTimeResult.allowed && spaceTimeResult.reason && (
+                <div className="text-[9px] opacity-60" style={{ color: '#ff4444' }}>
+                  {spaceTimeResult.reason}
+                </div>
+              )}
+
+              {spaceTimeResult.nextAvailable && (
+                <div className="text-[9px] opacity-40" style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}>
+                  Next: {spaceTimeResult.nextAvailable.toLocaleDateString()}
+                </div>
+              )}
+
+              {/* Current values */}
+              {spaceTimeResult.currentValues && (
+                <div className="pt-2 border-t border-current opacity-30 text-[8px] space-y-1" style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}>
+                  {spaceTimeResult.currentValues.moonPhase && (
+                    <div>Moon: {spaceTimeResult.currentValues.moonPhase.replace('_', ' ')}</div>
+                  )}
+                  {spaceTimeResult.currentValues.season && (
+                    <div>Season: {spaceTimeResult.currentValues.season}</div>
+                  )}
+                  {spaceTimeResult.currentValues.location?.city && (
+                    <div>Location: {spaceTimeResult.currentValues.location.city}</div>
+                  )}
+                </div>
+              )}
+
+              {/* Evolution values */}
+              {spaceTimeResult.evolutionValues && Object.keys(spaceTimeResult.evolutionValues).length > 0 && (
+                <div className="pt-2 border-t border-current opacity-50 text-[8px]" style={{ color: '#00ff88' }}>
+                  <div className="mb-1">Evolving:</div>
+                  {Object.entries(spaceTimeResult.evolutionValues).map(([param, value]) => (
+                    <div key={param}>{param}: {Math.round(value)}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Main Canvas */}
       <div className="h-screen flex items-center justify-center">
