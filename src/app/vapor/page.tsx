@@ -82,6 +82,7 @@ export default function VaporPage() {
         // Listen to all MIDI inputs
         inputs.forEach((input) => {
           input.onmidimessage = (event) => {
+            if (!event.data) return;
             const [status, note, velocity] = event.data;
             const command = status & 0xf0;
 
