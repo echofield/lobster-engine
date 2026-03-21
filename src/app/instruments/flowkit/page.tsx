@@ -25,6 +25,34 @@ interface DrumKit {
   hihat: string;
 }
 
+interface Pattern {
+  id: number;
+  name: string;
+  wave: WaveParams;
+  flow: FlowState;
+}
+
+// ============ DEFAULT PATTERNS ============
+
+const DEFAULT_PATTERNS: Pattern[] = [
+  { id: 1, name: 'HOUSE', wave: { comp: 0.6, pick: 0.25, magic: 0.2 }, flow: { energy: 0.8, density: 0.6, chaos: 0.1, humanize: 0.05 } },
+  { id: 2, name: 'TRAP', wave: { comp: 0.8, pick: 0.7, magic: 0.4 }, flow: { energy: 0.9, density: 0.4, chaos: 0.3, humanize: 0.15 } },
+  { id: 3, name: 'TECHNO', wave: { comp: 0.9, pick: 0.5, magic: 0.1 }, flow: { energy: 0.95, density: 0.7, chaos: 0.05, humanize: 0.02 } },
+  { id: 4, name: 'BROKEN', wave: { comp: 0.4, pick: 0.8, magic: 0.6 }, flow: { energy: 0.7, density: 0.5, chaos: 0.4, humanize: 0.2 } },
+  { id: 5, name: 'MINIMAL', wave: { comp: 0.3, pick: 0.3, magic: 0.1 }, flow: { energy: 0.5, density: 0.3, chaos: 0.1, humanize: 0.1 } },
+  { id: 6, name: 'GROOVE', wave: { comp: 0.5, pick: 0.4, magic: 0.3 }, flow: { energy: 0.7, density: 0.55, chaos: 0.15, humanize: 0.25 } },
+  { id: 7, name: 'ACID', wave: { comp: 0.7, pick: 0.6, magic: 0.5 }, flow: { energy: 0.85, density: 0.65, chaos: 0.2, humanize: 0.1 } },
+  { id: 8, name: 'AMBIENT', wave: { comp: 0.2, pick: 0.2, magic: 0.7 }, flow: { energy: 0.3, density: 0.2, chaos: 0.4, humanize: 0.3 } },
+  { id: 9, name: '', wave: { comp: 0.5, pick: 0.5, magic: 0.3 }, flow: { energy: 0.7, density: 0.5, chaos: 0.2, humanize: 0.1 } },
+  { id: 10, name: '', wave: { comp: 0.5, pick: 0.5, magic: 0.3 }, flow: { energy: 0.7, density: 0.5, chaos: 0.2, humanize: 0.1 } },
+  { id: 11, name: '', wave: { comp: 0.5, pick: 0.5, magic: 0.3 }, flow: { energy: 0.7, density: 0.5, chaos: 0.2, humanize: 0.1 } },
+  { id: 12, name: '', wave: { comp: 0.5, pick: 0.5, magic: 0.3 }, flow: { energy: 0.7, density: 0.5, chaos: 0.2, humanize: 0.1 } },
+  { id: 13, name: '', wave: { comp: 0.5, pick: 0.5, magic: 0.3 }, flow: { energy: 0.7, density: 0.5, chaos: 0.2, humanize: 0.1 } },
+  { id: 14, name: '', wave: { comp: 0.5, pick: 0.5, magic: 0.3 }, flow: { energy: 0.7, density: 0.5, chaos: 0.2, humanize: 0.1 } },
+  { id: 15, name: '', wave: { comp: 0.5, pick: 0.5, magic: 0.3 }, flow: { energy: 0.7, density: 0.5, chaos: 0.2, humanize: 0.1 } },
+  { id: 16, name: '', wave: { comp: 0.5, pick: 0.5, magic: 0.3 }, flow: { energy: 0.7, density: 0.5, chaos: 0.2, humanize: 0.1 } },
+];
+
 // ============ DRUM KITS ============
 
 const KITS: DrumKit[] = [
@@ -71,6 +99,10 @@ export default function FlowKitPage() {
 
   // Wave phase for visualization
   const [wavePhase, setWavePhase] = useState(0);
+
+  // Pattern state
+  const [patterns, setPatterns] = useState<Pattern[]>(DEFAULT_PATTERNS);
+  const [currentPattern, setCurrentPattern] = useState(1);
 
   const accentColor = '#7C5CFF';
 
@@ -229,6 +261,22 @@ export default function FlowKitPage() {
       Tone.Transport.swing = swing;
     }
   }, [swing, isPlaying]);
+
+  // Pattern selection
+  const selectPattern = useCallback((patternId: number) => {
+    // Save current settings to current pattern before switching
+    setPatterns(prev => prev.map(p =>
+      p.id === currentPattern ? { ...p, wave, flow } : p
+    ));
+
+    // Load new pattern
+    const pattern = patterns.find(p => p.id === patternId);
+    if (pattern) {
+      setWave(pattern.wave);
+      setFlow(pattern.flow);
+      setCurrentPattern(patternId);
+    }
+  }, [currentPattern, wave, flow, patterns]);
 
   // ============ WAVE VISUALIZATION ============
 
@@ -613,6 +661,39 @@ export default function FlowKitPage() {
           </button>
         </div>
 
+      </div>
+
+      {/* Pattern Selector - TR-909 Style */}
+      <div className="mt-8 border-t border-white/10 pt-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-xs uppercase tracking-widest text-white/40">PATTERN</div>
+          <div className="text-xs text-white/30">
+            {patterns.find(p => p.id === currentPattern)?.name || `PATTERN ${currentPattern}`}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {patterns.map((pattern) => (
+            <button
+              key={pattern.id}
+              onClick={() => selectPattern(pattern.id)}
+              className="flex-1 aspect-square border-2 flex items-center justify-center text-sm font-mono transition-all hover:scale-105"
+              style={{
+                borderColor: currentPattern === pattern.id ? accentColor : pattern.name ? '#444' : '#222',
+                background: currentPattern === pattern.id ? `${accentColor}20` : 'transparent',
+                color: currentPattern === pattern.id ? accentColor : pattern.name ? '#888' : '#444',
+              }}
+            >
+              {pattern.id}
+            </button>
+          ))}
+        </div>
+        {/* Pattern Group Labels */}
+        <div className="flex mt-2 text-[9px] uppercase tracking-widest text-white/20">
+          <div className="flex-1 text-center">1-4</div>
+          <div className="flex-1 text-center">5-8</div>
+          <div className="flex-1 text-center">9-12</div>
+          <div className="flex-1 text-center">13-16</div>
+        </div>
       </div>
 
       {/* Footer */}
