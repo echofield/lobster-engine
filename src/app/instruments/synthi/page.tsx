@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { SynthiEngine } from '@/lib/synthi-engine';
 import { AudioRecorder, MidiClock } from '@/lib/audio-recorder';
 import { SpaceTimeEngine, SpaceTimeConditions, ConditionResult } from '@/lib/spacetime-engine';
+import { SpaceTimeCreator, CreatorConfig } from '@/components/SpaceTimeCreator';
 
 type ThemeMode = 'day' | 'night';
 
@@ -46,6 +47,8 @@ export default function SynthiPage() {
   const [spaceTimeResult, setSpaceTimeResult] = useState<ConditionResult | null>(null);
   const [showConditionEditor, setShowConditionEditor] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<string>('');
+  const [showCreator, setShowCreator] = useState(false);
+  const [savedConfig, setSavedConfig] = useState<CreatorConfig | null>(null);
 
   // Theme colors
   const theme = {
@@ -307,6 +310,46 @@ export default function SynthiPage() {
 
     return () => clearInterval(interval);
   }, [spaceTimeEnabled, spaceTimeConditions]);
+
+  // Handle creator export
+  const handleCreatorExport = (config: CreatorConfig) => {
+    setSavedConfig(config);
+    setShowCreator(false);
+
+    // Apply the conditions from the creator
+    const conditions: SpaceTimeConditions = {
+      id: config.name.toLowerCase().replace(/\s+/g, '-'),
+      name: config.name,
+      description: config.description,
+      space: config.space,
+      time: config.time,
+      evolution: config.evolution,
+      createdAt: new Date().toISOString(),
+      createdBy: config.artistName,
+    };
+
+    setSpaceTimeConditions(conditions);
+    setSpaceTimeEnabled(true);
+
+    // Evaluate immediately
+    if (spaceTimeRef.current) {
+      spaceTimeRef.current.requestLocation().then(() => {
+        const result = spaceTimeRef.current!.evaluate(conditions);
+        setSpaceTimeResult(result);
+        if (result.evolutionValues) {
+          applyEvolutionValues(result.evolutionValues);
+        }
+      });
+    }
+  };
+
+  // Get current sound params for creator
+  const getCurrentSoundParams = (): Record<string, number> => ({
+    filterFreq,
+    filterQ,
+    lfo1Rate,
+    bpm,
+  });
 
   const togglePlay = () => {
     if (!engineRef.current) return;
@@ -667,6 +710,18 @@ export default function SynthiPage() {
         >
           {spaceTimeEnabled ? '◉ ST' : '○ ST'}
         </button>
+        {/* Creator Mode */}
+        <button
+          onClick={() => setShowCreator(true)}
+          className="text-[10px] uppercase tracking-[0.15em] transition-all px-2 py-1 border"
+          style={{
+            color: themeMode === 'night' ? '#00ff88' : '#00aa66',
+            borderColor: themeMode === 'night' ? 'rgba(0,255,136,0.3)' : 'rgba(0,170,102,0.3)',
+            opacity: 0.8
+          }}
+        >
+          Creator
+        </button>
         <div className="flex items-center gap-2">
           <div
             className="w-2 h-2 rounded-full transition-all"
@@ -1015,6 +1070,15 @@ export default function SynthiPage() {
           Click to play • Mouse to modulate • MIDI + Clock sync • Record to WAV
         </p>
       </div>
+
+      {/* Space-Time Creator */}
+      <SpaceTimeCreator
+        isOpen={showCreator}
+        onClose={() => setShowCreator(false)}
+        onExport={handleCreatorExport}
+        currentSoundParams={getCurrentSoundParams()}
+        themeMode={themeMode}
+      />
     </div>
   );
 }
