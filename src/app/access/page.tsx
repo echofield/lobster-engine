@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 interface AccessResponse {
@@ -20,16 +20,120 @@ interface AccessResponse {
   };
 }
 
+// Audio engine for bass rumble
+function useBassSynth() {
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const oscillatorRef = useRef<OscillatorNode | null>(null);
+  const gainRef = useRef<GainNode | null>(null);
+  const filterRef = useRef<BiquadFilterNode | null>(null);
+  const isPlayingRef = useRef(false);
+
+  const start = useCallback(() => {
+    if (isPlayingRef.current) return;
+
+    try {
+      const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      audioCtxRef.current = ctx;
+
+      // Create oscillator - sub bass
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = 40; // Deep sub bass
+
+      // Create filter - low pass
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 80;
+      filter.Q.value = 8;
+
+      // Create gain
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+
+      // Connect: osc -> filter -> gain -> destination
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start();
+
+      oscillatorRef.current = osc;
+      filterRef.current = filter;
+      gainRef.current = gain;
+      isPlayingRef.current = true;
+    } catch {
+      // Audio not supported
+    }
+  }, []);
+
+  const update = useCallback((intensity: number) => {
+    if (!audioCtxRef.current || !gainRef.current || !oscillatorRef.current || !filterRef.current) return;
+
+    const ctx = audioCtxRef.current;
+    const now = ctx.currentTime;
+
+    // Map intensity (0-1) to audio params
+    // Higher intensity = deeper frequency, more volume
+    const freq = 60 - (intensity * 35); // 60Hz -> 25Hz
+    const vol = intensity * 0.15; // Max 0.15 to keep it subtle
+    const filterFreq = 60 + (intensity * 40); // Open filter slightly with intensity
+
+    oscillatorRef.current.frequency.setTargetAtTime(freq, now, 0.1);
+    gainRef.current.gain.setTargetAtTime(vol, now, 0.05);
+    filterRef.current.frequency.setTargetAtTime(filterFreq, now, 0.1);
+  }, []);
+
+  const stop = useCallback(() => {
+    if (gainRef.current && audioCtxRef.current) {
+      gainRef.current.gain.setTargetAtTime(0, audioCtxRef.current.currentTime, 0.1);
+    }
+    setTimeout(() => {
+      oscillatorRef.current?.stop();
+      audioCtxRef.current?.close();
+      isPlayingRef.current = false;
+    }, 200);
+  }, []);
+
+  return { start, update, stop };
+}
+
 export default function AccessPage() {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<AccessResponse | null>(null);
+  const [orbitSpeed, setOrbitSpeed] = useState(0);
+  const [audioStarted, setAudioStarted] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const bassSynth = useBassSynth();
+
   // Get the redirect target (if any)
   const next = searchParams.get('next') || '/';
+
+  // Handle fader change
+  const handleOrbitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseFloat(e.target.value);
+    setOrbitSpeed(value);
+
+    // Start audio on first interaction
+    if (!audioStarted && value > 0) {
+      bassSynth.start();
+      setAudioStarted(true);
+    }
+
+    bassSynth.update(value);
+  };
+
+  // Clean up audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioStarted) {
+        bassSynth.stop();
+      }
+    };
+  }, [audioStarted, bassSynth]);
 
   // Format input as token if it matches pattern
   const formatAsToken = (value: string): string => {
@@ -111,16 +215,88 @@ export default function AccessPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      {/* Orbital background decoration */}
+      {/* Animated orbital background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        {/* Outer static ring */}
         <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full border border-[var(--foreground)]"
-          style={{ opacity: 0.03 }}
+          className="absolute top-1/2 left-1/2 w-[600px] h-[600px] rounded-full border border-[var(--foreground)]"
+          style={{
+            opacity: 0.03,
+            transform: 'translate(-50%, -50%)',
+          }}
+        />
+
+        {/* Rotating ring */}
+        <div
+          className="absolute top-1/2 left-1/2 w-[500px] h-[500px] rounded-full border border-dashed border-[var(--foreground)]"
+          style={{
+            opacity: 0.03 + (orbitSpeed * 0.08),
+            transform: 'translate(-50%, -50%)',
+            animation: orbitSpeed > 0.01 ? `orbitSpin ${Math.max(0.4, 25 - (orbitSpeed * 24))}s linear infinite` : 'none',
+          }}
+        />
+
+        {/* Inner counter-rotating ring */}
+        <div
+          className="absolute top-1/2 left-1/2 w-[400px] h-[400px] rounded-full border border-[var(--foreground)]"
+          style={{
+            opacity: 0.02 + (orbitSpeed * 0.05),
+            transform: 'translate(-50%, -50%)',
+            animation: orbitSpeed > 0.01 ? `orbitSpin ${Math.max(0.3, 18 - (orbitSpeed * 17))}s linear infinite reverse` : 'none',
+          }}
+        />
+
+        {/* Orbiting dot */}
+        {orbitSpeed > 0.01 && (
+          <div
+            className="absolute top-1/2 left-1/2 w-[500px] h-[500px]"
+            style={{
+              transform: 'translate(-50%, -50%)',
+              animation: `orbitSpin ${Math.max(0.4, 25 - (orbitSpeed * 24))}s linear infinite`,
+            }}
+          >
+            <div
+              className="absolute top-0 left-1/2 w-2 h-2 rounded-full bg-[var(--foreground)]"
+              style={{
+                opacity: 0.15 + (orbitSpeed * 0.4),
+                transform: `translateX(-50%) scale(${1 + orbitSpeed * 0.8})`,
+                boxShadow: orbitSpeed > 0.5 ? `0 0 ${orbitSpeed * 20}px rgba(0,0,0,0.1)` : 'none',
+              }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Keyframes */}
+      <style jsx>{`
+        @keyframes orbitSpin {
+          from { transform: translate(-50%, -50%) rotate(0deg); }
+          to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+      `}</style>
+
+      {/* Fader control - bottom right */}
+      <div className="fixed bottom-8 right-8 flex flex-col items-center gap-2">
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={orbitSpeed}
+          onChange={handleOrbitChange}
+          className="w-24 h-1 appearance-none bg-[var(--border)] rounded-full cursor-pointer rotate-[-90deg] origin-center"
+          style={{
+            transform: 'rotate(-90deg)',
+            accentColor: 'var(--foreground)',
+          }}
+          aria-label="Orbit speed"
         />
         <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full border border-dashed border-[var(--foreground)]"
-          style={{ opacity: 0.02 }}
-        />
+          className="label-micro mt-8"
+          style={{ opacity: 0.2 + (orbitSpeed * 0.3) }}
+        >
+          {orbitSpeed > 0.01 ? Math.round(orbitSpeed * 100) : '·'}
+        </div>
       </div>
 
       <div className="relative w-full max-w-sm">
