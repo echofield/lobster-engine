@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useLanguage } from './LanguageProvider';
 import { LanguageToggle } from './LanguageToggle';
 import { clsx } from 'clsx';
@@ -24,7 +24,18 @@ const navItems = [
 
 export function Navigation() {
   const pathname = usePathname();
+  const router = useRouter();
   const { language } = useLanguage();
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+      router.push('/access');
+      router.refresh();
+    } catch {
+      window.location.href = '/access';
+    }
+  };
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 h-14 px-6 flex items-center justify-between bg-[var(--background)]">
@@ -60,9 +71,17 @@ export function Navigation() {
         <Link href="/guide" className="nav-link">
           Guide
         </Link>
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="opacity-20">
-          <path d="M6 0L12 6L6 12L0 6L6 0Z" stroke="currentColor" strokeWidth="1" fill="none" />
-        </svg>
+        <button
+          onClick={handleLogout}
+          className="nav-link cursor-pointer border-none bg-transparent"
+          title="Logout"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+        </button>
       </div>
     </nav>
   );
