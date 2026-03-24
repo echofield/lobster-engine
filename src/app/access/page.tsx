@@ -20,164 +20,200 @@ interface AccessResponse {
   };
 }
 
-// Instrument definitions
-const INSTRUMENTS = [
-  { id: 'sub', name: 'SUB', freq: 35, type: 'sine' as OscillatorType, color: '#7C5CFF' },
-  { id: 'pad', name: 'PAD', freq: 110, type: 'sine' as OscillatorType, color: '#3b82f6' },
-  { id: 'air', name: 'AIR', freq: 220, type: 'triangle' as OscillatorType, color: '#22c55e' },
-  { id: 'hum', name: 'HUM', freq: 82, type: 'sawtooth' as OscillatorType, color: '#eab308' },
-  { id: 'dust', name: 'DUST', freq: 0, type: 'sine' as OscillatorType, color: '#f97316' }, // noise
-  { id: 'bell', name: 'BELL', freq: 440, type: 'sine' as OscillatorType, color: '#ef4444' },
-];
+// Sound types for constellation nodes
+type SoundType = 'sub' | 'pad' | 'air' | 'hum' | 'dust' | 'bell' | 'drone' | 'chime';
 
-// Constellation nodes - patchbay inspired
-const CONSTELLATION_NODES = [
-  { x: 15, y: 20, size: 3, type: 'jack' },
-  { x: 25, y: 35, size: 2, type: 'pad' },
-  { x: 35, y: 15, size: 4, type: 'jack' },
-  { x: 45, y: 45, size: 3, type: 'pad' },
-  { x: 55, y: 25, size: 2, type: 'jack' },
-  { x: 65, y: 40, size: 3, type: 'pad' },
-  { x: 75, y: 18, size: 4, type: 'jack' },
-  { x: 85, y: 55, size: 2, type: 'pad' },
-  { x: 20, y: 60, size: 3, type: 'jack' },
-  { x: 40, y: 70, size: 2, type: 'pad' },
-  { x: 60, y: 65, size: 3, type: 'jack' },
-  { x: 80, y: 75, size: 4, type: 'pad' },
-  { x: 30, y: 85, size: 2, type: 'jack' },
-  { x: 50, y: 80, size: 3, type: 'pad' },
-  { x: 70, y: 88, size: 2, type: 'jack' },
+const SOUND_CONFIG: Record<SoundType, { freq: number; type: OscillatorType; color: string; name: string }> = {
+  sub: { freq: 40, type: 'sine', color: '#7C5CFF', name: 'SUB' },
+  pad: { freq: 110, type: 'sine', color: '#3b82f6', name: 'PAD' },
+  air: { freq: 220, type: 'triangle', color: '#22c55e', name: 'AIR' },
+  hum: { freq: 82, type: 'sawtooth', color: '#eab308', name: 'HUM' },
+  dust: { freq: 0, type: 'sine', color: '#f97316', name: 'DUST' },
+  bell: { freq: 440, type: 'sine', color: '#ef4444', name: 'BELL' },
+  drone: { freq: 55, type: 'triangle', color: '#8b5cf6', name: 'DRONE' },
+  chime: { freq: 880, type: 'sine', color: '#06b6d4', name: 'CHIME' },
+};
+
+// Constellation nodes - each linked to a sound
+interface ConstellationNode {
+  x: number;
+  y: number;
+  size: number;
+  sound: SoundType;
+}
+
+const CONSTELLATION_NODES: ConstellationNode[] = [
+  { x: 12, y: 18, size: 22, sound: 'sub' },
+  { x: 28, y: 35, size: 18, sound: 'pad' },
+  { x: 18, y: 58, size: 20, sound: 'air' },
+  { x: 38, y: 78, size: 17, sound: 'hum' },
+  { x: 72, y: 20, size: 21, sound: 'drone' },
+  { x: 85, y: 42, size: 18, sound: 'bell' },
+  { x: 70, y: 65, size: 19, sound: 'chime' },
+  { x: 88, y: 80, size: 16, sound: 'dust' },
 ];
 
 // Connections between nodes
-const CONNECTIONS = [
-  [0, 1], [1, 2], [2, 4], [3, 5], [4, 6], [5, 7],
-  [8, 9], [9, 10], [10, 11], [12, 13], [13, 14],
-  [1, 8], [3, 9], [5, 10], [6, 11], [2, 3], [4, 5],
+const CONNECTIONS: [number, number][] = [
+  [0, 1], [1, 2], [2, 3],
+  [4, 5], [5, 6], [6, 7],
+  [1, 4], [2, 6],
 ];
 
-// Audio engine hook for multiple instruments
-function useAmbientSynth() {
+// Audio engine for constellation - toggle sounds on/off
+function useConstellationAudio() {
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const instrumentsRef = useRef<Map<string, {
-    osc: OscillatorNode | GainNode;
+  const soundsRef = useRef<Map<SoundType, {
+    source: OscillatorNode | AudioBufferSourceNode;
     gain: GainNode;
     filter: BiquadFilterNode;
+    extra?: OscillatorNode[];
   }>>(new Map());
   const masterGainRef = useRef<GainNode | null>(null);
-  const isInitializedRef = useRef(false);
+  const noiseBufferRef = useRef<AudioBuffer | null>(null);
 
   const init = useCallback(() => {
-    if (isInitializedRef.current) return;
+    if (audioCtxRef.current) return audioCtxRef.current;
 
-    try {
-      const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-      audioCtxRef.current = ctx;
+    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    audioCtxRef.current = ctx;
 
-      // Master gain
-      const masterGain = ctx.createGain();
-      masterGain.gain.value = 0.7;
-      masterGain.connect(ctx.destination);
-      masterGainRef.current = masterGain;
+    // Master gain
+    const masterGain = ctx.createGain();
+    masterGain.gain.value = 0.5;
+    masterGain.connect(ctx.destination);
+    masterGainRef.current = masterGain;
 
-      // Create each instrument
-      INSTRUMENTS.forEach(inst => {
-        const filter = ctx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.value = 800;
-        filter.Q.value = 1;
+    // Create noise buffer for dust sound
+    const bufferSize = 2 * ctx.sampleRate;
+    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = Math.random() * 2 - 1;
+    }
+    noiseBufferRef.current = noiseBuffer;
 
-        const gain = ctx.createGain();
-        gain.gain.value = 0;
+    return ctx;
+  }, []);
 
-        if (inst.id === 'dust') {
-          // Noise generator for dust/texture
-          const bufferSize = 2 * ctx.sampleRate;
-          const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-          const output = noiseBuffer.getChannelData(0);
-          for (let i = 0; i < bufferSize; i++) {
-            output[i] = Math.random() * 2 - 1;
-          }
-          const noise = ctx.createBufferSource();
-          noise.buffer = noiseBuffer;
-          noise.loop = true;
+  const toggleSound = useCallback((soundType: SoundType, active: boolean) => {
+    const ctx = init();
+    if (!ctx || !masterGainRef.current) return;
 
-          // Extra filter for noise
-          const noiseFilter = ctx.createBiquadFilter();
-          noiseFilter.type = 'bandpass';
-          noiseFilter.frequency.value = 1000;
-          noiseFilter.Q.value = 0.5;
+    const config = SOUND_CONFIG[soundType];
+    const existing = soundsRef.current.get(soundType);
 
-          noise.connect(noiseFilter);
-          noiseFilter.connect(filter);
-          filter.connect(gain);
-          gain.connect(masterGain);
-          noise.start();
+    if (active && !existing) {
+      // Create new sound
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 1200;
+      filter.Q.value = 0.7;
 
-          instrumentsRef.current.set(inst.id, { osc: gain, gain, filter });
-        } else {
-          const osc = ctx.createOscillator();
-          osc.type = inst.type;
-          osc.frequency.value = inst.freq;
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
 
-          // Add slight detune for richness
-          if (inst.id === 'pad') {
-            const osc2 = ctx.createOscillator();
-            osc2.type = 'sine';
-            osc2.frequency.value = inst.freq * 1.5; // Fifth
-            osc2.detune.value = 5;
-            osc2.connect(filter);
-            osc2.start();
+      let source: OscillatorNode | AudioBufferSourceNode;
+      const extra: OscillatorNode[] = [];
 
-            const osc3 = ctx.createOscillator();
-            osc3.type = 'sine';
-            osc3.frequency.value = inst.freq * 2; // Octave
-            osc3.detune.value = -3;
-            osc3.connect(filter);
-            osc3.start();
-          }
+      if (soundType === 'dust' && noiseBufferRef.current) {
+        // Noise for dust
+        const noise = ctx.createBufferSource();
+        noise.buffer = noiseBufferRef.current;
+        noise.loop = true;
 
-          osc.connect(filter);
-          filter.connect(gain);
-          gain.connect(masterGain);
-          osc.start();
+        const bandpass = ctx.createBiquadFilter();
+        bandpass.type = 'bandpass';
+        bandpass.frequency.value = 800;
+        bandpass.Q.value = 0.3;
 
-          instrumentsRef.current.set(inst.id, { osc, gain, filter });
+        noise.connect(bandpass);
+        bandpass.connect(filter);
+        noise.start();
+        source = noise;
+      } else {
+        // Oscillator sounds
+        const osc = ctx.createOscillator();
+        osc.type = config.type;
+        osc.frequency.value = config.freq;
+
+        // Add richness for pads and drones
+        if (soundType === 'pad' || soundType === 'drone') {
+          const osc2 = ctx.createOscillator();
+          osc2.type = 'sine';
+          osc2.frequency.value = config.freq * 1.5;
+          osc2.detune.value = 7;
+          const gain2 = ctx.createGain();
+          gain2.gain.value = 0.3;
+          osc2.connect(gain2);
+          gain2.connect(filter);
+          osc2.start();
+          extra.push(osc2);
         }
-      });
 
-      isInitializedRef.current = true;
-    } catch {
-      // Audio not supported
+        // Bells and chimes get higher cutoff
+        if (soundType === 'bell' || soundType === 'chime') {
+          filter.frequency.value = 3000;
+        }
+
+        osc.connect(filter);
+        osc.start();
+        source = osc;
+      }
+
+      filter.connect(gain);
+      gain.connect(masterGainRef.current);
+
+      // Fade in
+      gain.gain.setTargetAtTime(0.3, ctx.currentTime, 0.1);
+
+      soundsRef.current.set(soundType, { source, gain, filter, extra });
+    } else if (!active && existing) {
+      // Fade out and stop
+      const now = ctx.currentTime;
+      existing.gain.gain.setTargetAtTime(0, now, 0.15);
+
+      setTimeout(() => {
+        try {
+          if ('stop' in existing.source) {
+            existing.source.stop();
+          }
+          existing.source.disconnect();
+          existing.gain.disconnect();
+          existing.filter.disconnect();
+          existing.extra?.forEach(osc => {
+            osc.stop();
+            osc.disconnect();
+          });
+        } catch {
+          // Already stopped
+        }
+        soundsRef.current.delete(soundType);
+      }, 300);
     }
+  }, [init]);
+
+  const cleanup = useCallback(() => {
+    soundsRef.current.forEach((sound) => {
+      try {
+        if ('stop' in sound.source) {
+          sound.source.stop();
+        }
+        sound.source.disconnect();
+        sound.extra?.forEach(osc => {
+          osc.stop();
+          osc.disconnect();
+        });
+      } catch {
+        // Already stopped
+      }
+    });
+    soundsRef.current.clear();
+    audioCtxRef.current?.close();
+    audioCtxRef.current = null;
   }, []);
 
-  const updateInstrument = useCallback((id: string, volume: number) => {
-    const inst = instrumentsRef.current.get(id);
-    if (!inst || !audioCtxRef.current) return;
-
-    const ctx = audioCtxRef.current;
-    const now = ctx.currentTime;
-
-    // Smooth volume transition
-    inst.gain.gain.setTargetAtTime(volume * 0.3, now, 0.1);
-
-    // Adjust filter based on volume
-    const filterFreq = 200 + (volume * 2000);
-    inst.filter.frequency.setTargetAtTime(filterFreq, now, 0.2);
-  }, []);
-
-  const stop = useCallback(() => {
-    if (masterGainRef.current && audioCtxRef.current) {
-      masterGainRef.current.gain.setTargetAtTime(0, audioCtxRef.current.currentTime, 0.3);
-    }
-    setTimeout(() => {
-      audioCtxRef.current?.close();
-      isInitializedRef.current = false;
-    }, 500);
-  }, []);
-
-  return { init, updateInstrument, stop };
+  return { toggleSound, cleanup };
 }
 
 export default function AccessPage() {
@@ -185,51 +221,38 @@ export default function AccessPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<AccessResponse | null>(null);
-  const [volumes, setVolumes] = useState<Record<string, number>>({
-    sub: 0, pad: 0, air: 0, hum: 0, dust: 0, bell: 0
-  });
-  const [audioStarted, setAudioStarted] = useState(false);
   const [activeNodes, setActiveNodes] = useState<Set<number>>(new Set());
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const synth = useAmbientSynth();
+  const audio = useConstellationAudio();
 
   const next = searchParams.get('next') || '/';
 
-  // Calculate total energy for constellation animation
-  const totalEnergy = Object.values(volumes).reduce((a, b) => a + b, 0) / INSTRUMENTS.length;
+  // Toggle a node's sound when clicked
+  const handleNodeClick = (nodeIndex: number) => {
+    const node = CONSTELLATION_NODES[nodeIndex];
+    const isActive = activeNodes.has(nodeIndex);
 
-  // Handle fader change
-  const handleVolumeChange = (id: string, value: number) => {
-    if (!audioStarted) {
-      synth.init();
-      setAudioStarted(true);
-    }
+    setActiveNodes(prev => {
+      const next = new Set(prev);
+      if (isActive) {
+        next.delete(nodeIndex);
+      } else {
+        next.add(nodeIndex);
+      }
+      return next;
+    });
 
-    setVolumes(prev => ({ ...prev, [id]: value }));
-    synth.updateInstrument(id, value);
-
-    // Activate random nodes based on volume
-    if (value > 0.3) {
-      const nodeIndex = Math.floor(Math.random() * CONSTELLATION_NODES.length);
-      setActiveNodes(prev => new Set([...prev, nodeIndex]));
-      setTimeout(() => {
-        setActiveNodes(prev => {
-          const next = new Set(prev);
-          next.delete(nodeIndex);
-          return next;
-        });
-      }, 1000 + Math.random() * 2000);
-    }
+    audio.toggleSound(node.sound, !isActive);
   };
 
-  // Cleanup
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (audioStarted) synth.stop();
+      audio.cleanup();
     };
-  }, [audioStarted, synth]);
+  }, [audio]);
 
   // Form handlers
   const formatAsToken = (value: string): string => {
@@ -295,13 +318,16 @@ export default function AccessPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 overflow-hidden">
-      {/* Constellation Background */}
-      <svg className="fixed inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.6 }}>
+      {/* Constellation - Clickable Nodes */}
+      <svg className="fixed inset-0 w-full h-full" style={{ zIndex: 0 }}>
         {/* Connection lines */}
         {CONNECTIONS.map(([from, to], i) => {
           const n1 = CONSTELLATION_NODES[from];
           const n2 = CONSTELLATION_NODES[to];
           const isActive = activeNodes.has(from) || activeNodes.has(to);
+          const color1 = SOUND_CONFIG[n1.sound].color;
+          const color2 = SOUND_CONFIG[n2.sound].color;
+
           return (
             <line
               key={`conn-${i}`}
@@ -309,109 +335,139 @@ export default function AccessPage() {
               y1={`${n1.y}%`}
               x2={`${n2.x}%`}
               y2={`${n2.y}%`}
-              stroke="var(--foreground)"
-              strokeWidth={isActive ? 1.5 : 0.5}
+              stroke={isActive ? (activeNodes.has(from) ? color1 : color2) : 'var(--foreground)'}
+              strokeWidth={isActive ? 2 : 0.5}
               style={{
-                opacity: 0.05 + (totalEnergy * 0.15) + (isActive ? 0.2 : 0),
-                transition: 'opacity 0.5s, stroke-width 0.3s',
+                opacity: isActive ? 0.5 : 0.1,
+                transition: 'all 0.3s ease',
               }}
             />
           );
         })}
 
-        {/* Nodes */}
+        {/* Clickable Nodes */}
         {CONSTELLATION_NODES.map((node, i) => {
           const isActive = activeNodes.has(i);
-          const instIndex = i % INSTRUMENTS.length;
-          const instVolume = volumes[INSTRUMENTS[instIndex].id];
+          const config = SOUND_CONFIG[node.sound];
 
           return (
-            <g key={`node-${i}`}>
-              {/* Glow */}
+            <g
+              key={`node-${i}`}
+              onClick={() => handleNodeClick(i)}
+              style={{ cursor: 'pointer' }}
+            >
+              {/* Outer glow when active */}
               {isActive && (
-                <circle
-                  cx={`${node.x}%`}
-                  cy={`${node.y}%`}
-                  r={node.size * 4}
-                  fill={INSTRUMENTS[instIndex].color}
-                  style={{ opacity: 0.1 }}
-                />
+                <>
+                  <circle
+                    cx={`${node.x}%`}
+                    cy={`${node.y}%`}
+                    r={node.size * 2.5}
+                    fill={config.color}
+                    style={{ opacity: 0.1 }}
+                  />
+                  <circle
+                    cx={`${node.x}%`}
+                    cy={`${node.y}%`}
+                    r={node.size * 1.8}
+                    fill={config.color}
+                    style={{ opacity: 0.2 }}
+                  />
+                </>
               )}
 
-              {/* Node */}
-              {node.type === 'jack' ? (
-                <circle
-                  cx={`${node.x}%`}
-                  cy={`${node.y}%`}
-                  r={node.size + (instVolume * 2)}
-                  fill="none"
-                  stroke="var(--foreground)"
-                  strokeWidth={isActive ? 1.5 : 0.5}
-                  style={{
-                    opacity: 0.1 + (instVolume * 0.4) + (isActive ? 0.3 : 0),
-                    transition: 'all 0.3s',
-                  }}
-                />
-              ) : (
-                <rect
-                  x={`${node.x - node.size / 2}%`}
-                  y={`${node.y - node.size / 2}%`}
-                  width={`${node.size + instVolume * 2}%`}
-                  height={`${node.size + instVolume * 2}%`}
-                  fill={isActive ? INSTRUMENTS[instIndex].color : 'var(--foreground)'}
-                  style={{
-                    opacity: 0.08 + (instVolume * 0.3) + (isActive ? 0.4 : 0),
-                    transform: `rotate(45deg)`,
-                    transformOrigin: `${node.x}% ${node.y}%`,
-                    transition: 'all 0.3s',
-                  }}
-                />
-              )}
+              {/* Main circle */}
+              <circle
+                cx={`${node.x}%`}
+                cy={`${node.y}%`}
+                r={node.size}
+                fill={isActive ? config.color : 'transparent'}
+                stroke={isActive ? config.color : 'var(--foreground)'}
+                strokeWidth={isActive ? 2 : 1}
+                style={{
+                  opacity: isActive ? 0.9 : 0.2,
+                  transition: 'all 0.2s ease',
+                }}
+              />
+
+              {/* Inner dot */}
+              <circle
+                cx={`${node.x}%`}
+                cy={`${node.y}%`}
+                r={isActive ? 5 : 3}
+                fill={isActive ? '#fff' : 'var(--foreground)'}
+                style={{
+                  opacity: isActive ? 1 : 0.4,
+                  transition: 'all 0.2s ease',
+                }}
+              />
+
+              {/* Label */}
+              <text
+                x={`${node.x}%`}
+                y={`${node.y + 5}%`}
+                textAnchor="middle"
+                fill={isActive ? config.color : 'var(--foreground)'}
+                fontSize="10"
+                fontFamily="var(--font-mono)"
+                style={{
+                  opacity: isActive ? 0.9 : 0.25,
+                  transition: 'opacity 0.2s ease',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.15em',
+                }}
+              >
+                {config.name}
+              </text>
+
+              {/* Invisible larger hit area for easier clicking */}
+              <circle
+                cx={`${node.x}%`}
+                cy={`${node.y}%`}
+                r={node.size + 20}
+                fill="transparent"
+              />
             </g>
+          );
+        })}
+
+        {/* Pulsing ring for active nodes */}
+        {Array.from(activeNodes).map(nodeIndex => {
+          const node = CONSTELLATION_NODES[nodeIndex];
+          const config = SOUND_CONFIG[node.sound];
+          return (
+            <circle
+              key={`pulse-${nodeIndex}`}
+              cx={`${node.x}%`}
+              cy={`${node.y}%`}
+              r={node.size}
+              fill="none"
+              stroke={config.color}
+              strokeWidth="1.5"
+              className="animate-pulse-ring"
+            />
           );
         })}
       </svg>
 
-      {/* Left Faders - 6 Instruments */}
-      <div className="fixed left-6 top-1/2 -translate-y-1/2 flex flex-col gap-6">
-        {INSTRUMENTS.map((inst) => (
-          <div key={inst.id} className="flex items-center gap-3">
-            {/* Fader */}
-            <div className="relative h-20 w-1 bg-[var(--border)] rounded-full">
-              <div
-                className="absolute bottom-0 w-full rounded-full transition-all duration-100"
-                style={{
-                  height: `${volumes[inst.id] * 100}%`,
-                  backgroundColor: inst.color,
-                  opacity: 0.6,
-                }}
-              />
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={volumes[inst.id]}
-                onChange={(e) => handleVolumeChange(inst.id, parseFloat(e.target.value))}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
-                aria-label={inst.name}
-              />
-            </div>
-            {/* Label */}
-            <span
-              className="label-micro w-8"
-              style={{
-                color: volumes[inst.id] > 0 ? inst.color : 'var(--foreground)',
-                opacity: 0.3 + (volumes[inst.id] * 0.7),
-                transition: 'all 0.2s',
-              }}
-            >
-              {inst.name}
-            </span>
-          </div>
-        ))}
-      </div>
+      {/* Pulse animation */}
+      <style jsx global>{`
+        @keyframes pulse-ring {
+          0%, 100% {
+            transform: scale(1);
+            opacity: 0.5;
+          }
+          50% {
+            transform: scale(1.6);
+            opacity: 0;
+          }
+        }
+        .animate-pulse-ring {
+          animation: pulse-ring 2s ease-out infinite;
+          transform-origin: center;
+          transform-box: fill-box;
+        }
+      `}</style>
 
       {/* Main Content */}
       <div className="relative w-full max-w-sm z-10">
