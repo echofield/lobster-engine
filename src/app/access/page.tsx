@@ -20,81 +20,164 @@ interface AccessResponse {
   };
 }
 
-// Audio engine for bass rumble
-function useBassSynth() {
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const oscillatorRef = useRef<OscillatorNode | null>(null);
-  const gainRef = useRef<GainNode | null>(null);
-  const filterRef = useRef<BiquadFilterNode | null>(null);
-  const isPlayingRef = useRef(false);
+// Instrument definitions
+const INSTRUMENTS = [
+  { id: 'sub', name: 'SUB', freq: 35, type: 'sine' as OscillatorType, color: '#7C5CFF' },
+  { id: 'pad', name: 'PAD', freq: 110, type: 'sine' as OscillatorType, color: '#3b82f6' },
+  { id: 'air', name: 'AIR', freq: 220, type: 'triangle' as OscillatorType, color: '#22c55e' },
+  { id: 'hum', name: 'HUM', freq: 82, type: 'sawtooth' as OscillatorType, color: '#eab308' },
+  { id: 'dust', name: 'DUST', freq: 0, type: 'sine' as OscillatorType, color: '#f97316' }, // noise
+  { id: 'bell', name: 'BELL', freq: 440, type: 'sine' as OscillatorType, color: '#ef4444' },
+];
 
-  const start = useCallback(() => {
-    if (isPlayingRef.current) return;
+// Constellation nodes - patchbay inspired
+const CONSTELLATION_NODES = [
+  { x: 15, y: 20, size: 3, type: 'jack' },
+  { x: 25, y: 35, size: 2, type: 'pad' },
+  { x: 35, y: 15, size: 4, type: 'jack' },
+  { x: 45, y: 45, size: 3, type: 'pad' },
+  { x: 55, y: 25, size: 2, type: 'jack' },
+  { x: 65, y: 40, size: 3, type: 'pad' },
+  { x: 75, y: 18, size: 4, type: 'jack' },
+  { x: 85, y: 55, size: 2, type: 'pad' },
+  { x: 20, y: 60, size: 3, type: 'jack' },
+  { x: 40, y: 70, size: 2, type: 'pad' },
+  { x: 60, y: 65, size: 3, type: 'jack' },
+  { x: 80, y: 75, size: 4, type: 'pad' },
+  { x: 30, y: 85, size: 2, type: 'jack' },
+  { x: 50, y: 80, size: 3, type: 'pad' },
+  { x: 70, y: 88, size: 2, type: 'jack' },
+];
+
+// Connections between nodes
+const CONNECTIONS = [
+  [0, 1], [1, 2], [2, 4], [3, 5], [4, 6], [5, 7],
+  [8, 9], [9, 10], [10, 11], [12, 13], [13, 14],
+  [1, 8], [3, 9], [5, 10], [6, 11], [2, 3], [4, 5],
+];
+
+// Audio engine hook for multiple instruments
+function useAmbientSynth() {
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const instrumentsRef = useRef<Map<string, {
+    osc: OscillatorNode | GainNode;
+    gain: GainNode;
+    filter: BiquadFilterNode;
+  }>>(new Map());
+  const masterGainRef = useRef<GainNode | null>(null);
+  const isInitializedRef = useRef(false);
+
+  const init = useCallback(() => {
+    if (isInitializedRef.current) return;
 
     try {
       const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       audioCtxRef.current = ctx;
 
-      // Create oscillator - sub bass
-      const osc = ctx.createOscillator();
-      osc.type = 'sine';
-      osc.frequency.value = 40; // Deep sub bass
+      // Master gain
+      const masterGain = ctx.createGain();
+      masterGain.gain.value = 0.7;
+      masterGain.connect(ctx.destination);
+      masterGainRef.current = masterGain;
 
-      // Create filter - low pass
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.value = 80;
-      filter.Q.value = 8;
+      // Create each instrument
+      INSTRUMENTS.forEach(inst => {
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 800;
+        filter.Q.value = 1;
 
-      // Create gain
-      const gain = ctx.createGain();
-      gain.gain.value = 0;
+        const gain = ctx.createGain();
+        gain.gain.value = 0;
 
-      // Connect: osc -> filter -> gain -> destination
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(ctx.destination);
+        if (inst.id === 'dust') {
+          // Noise generator for dust/texture
+          const bufferSize = 2 * ctx.sampleRate;
+          const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+          const output = noiseBuffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) {
+            output[i] = Math.random() * 2 - 1;
+          }
+          const noise = ctx.createBufferSource();
+          noise.buffer = noiseBuffer;
+          noise.loop = true;
 
-      osc.start();
+          // Extra filter for noise
+          const noiseFilter = ctx.createBiquadFilter();
+          noiseFilter.type = 'bandpass';
+          noiseFilter.frequency.value = 1000;
+          noiseFilter.Q.value = 0.5;
 
-      oscillatorRef.current = osc;
-      filterRef.current = filter;
-      gainRef.current = gain;
-      isPlayingRef.current = true;
+          noise.connect(noiseFilter);
+          noiseFilter.connect(filter);
+          filter.connect(gain);
+          gain.connect(masterGain);
+          noise.start();
+
+          instrumentsRef.current.set(inst.id, { osc: gain, gain, filter });
+        } else {
+          const osc = ctx.createOscillator();
+          osc.type = inst.type;
+          osc.frequency.value = inst.freq;
+
+          // Add slight detune for richness
+          if (inst.id === 'pad') {
+            const osc2 = ctx.createOscillator();
+            osc2.type = 'sine';
+            osc2.frequency.value = inst.freq * 1.5; // Fifth
+            osc2.detune.value = 5;
+            osc2.connect(filter);
+            osc2.start();
+
+            const osc3 = ctx.createOscillator();
+            osc3.type = 'sine';
+            osc3.frequency.value = inst.freq * 2; // Octave
+            osc3.detune.value = -3;
+            osc3.connect(filter);
+            osc3.start();
+          }
+
+          osc.connect(filter);
+          filter.connect(gain);
+          gain.connect(masterGain);
+          osc.start();
+
+          instrumentsRef.current.set(inst.id, { osc, gain, filter });
+        }
+      });
+
+      isInitializedRef.current = true;
     } catch {
       // Audio not supported
     }
   }, []);
 
-  const update = useCallback((intensity: number) => {
-    if (!audioCtxRef.current || !gainRef.current || !oscillatorRef.current || !filterRef.current) return;
+  const updateInstrument = useCallback((id: string, volume: number) => {
+    const inst = instrumentsRef.current.get(id);
+    if (!inst || !audioCtxRef.current) return;
 
     const ctx = audioCtxRef.current;
     const now = ctx.currentTime;
 
-    // Map intensity (0-1) to audio params
-    // Higher intensity = deeper frequency, more volume
-    const freq = 60 - (intensity * 35); // 60Hz -> 25Hz
-    const vol = intensity * 0.15; // Max 0.15 to keep it subtle
-    const filterFreq = 60 + (intensity * 40); // Open filter slightly with intensity
+    // Smooth volume transition
+    inst.gain.gain.setTargetAtTime(volume * 0.3, now, 0.1);
 
-    oscillatorRef.current.frequency.setTargetAtTime(freq, now, 0.1);
-    gainRef.current.gain.setTargetAtTime(vol, now, 0.05);
-    filterRef.current.frequency.setTargetAtTime(filterFreq, now, 0.1);
+    // Adjust filter based on volume
+    const filterFreq = 200 + (volume * 2000);
+    inst.filter.frequency.setTargetAtTime(filterFreq, now, 0.2);
   }, []);
 
   const stop = useCallback(() => {
-    if (gainRef.current && audioCtxRef.current) {
-      gainRef.current.gain.setTargetAtTime(0, audioCtxRef.current.currentTime, 0.1);
+    if (masterGainRef.current && audioCtxRef.current) {
+      masterGainRef.current.gain.setTargetAtTime(0, audioCtxRef.current.currentTime, 0.3);
     }
     setTimeout(() => {
-      oscillatorRef.current?.stop();
       audioCtxRef.current?.close();
-      isPlayingRef.current = false;
-    }, 200);
+      isInitializedRef.current = false;
+    }, 500);
   }, []);
 
-  return { start, update, stop };
+  return { init, updateInstrument, stop };
 }
 
 export default function AccessPage() {
@@ -102,51 +185,61 @@ export default function AccessPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<AccessResponse | null>(null);
-  const [orbitSpeed, setOrbitSpeed] = useState(0);
+  const [volumes, setVolumes] = useState<Record<string, number>>({
+    sub: 0, pad: 0, air: 0, hum: 0, dust: 0, bell: 0
+  });
   const [audioStarted, setAudioStarted] = useState(false);
+  const [activeNodes, setActiveNodes] = useState<Set<number>>(new Set());
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const bassSynth = useBassSynth();
+  const synth = useAmbientSynth();
 
-  // Get the redirect target (if any)
   const next = searchParams.get('next') || '/';
 
-  // Handle fader change
-  const handleOrbitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseFloat(e.target.value);
-    setOrbitSpeed(value);
+  // Calculate total energy for constellation animation
+  const totalEnergy = Object.values(volumes).reduce((a, b) => a + b, 0) / INSTRUMENTS.length;
 
-    // Start audio on first interaction
-    if (!audioStarted && value > 0) {
-      bassSynth.start();
+  // Handle fader change
+  const handleVolumeChange = (id: string, value: number) => {
+    if (!audioStarted) {
+      synth.init();
       setAudioStarted(true);
     }
 
-    bassSynth.update(value);
+    setVolumes(prev => ({ ...prev, [id]: value }));
+    synth.updateInstrument(id, value);
+
+    // Activate random nodes based on volume
+    if (value > 0.3) {
+      const nodeIndex = Math.floor(Math.random() * CONSTELLATION_NODES.length);
+      setActiveNodes(prev => new Set([...prev, nodeIndex]));
+      setTimeout(() => {
+        setActiveNodes(prev => {
+          const next = new Set(prev);
+          next.delete(nodeIndex);
+          return next;
+        });
+      }, 1000 + Math.random() * 2000);
+    }
   };
 
-  // Clean up audio on unmount
+  // Cleanup
   useEffect(() => {
     return () => {
-      if (audioStarted) {
-        bassSynth.stop();
-      }
+      if (audioStarted) synth.stop();
     };
-  }, [audioStarted, bassSynth]);
+  }, [audioStarted, synth]);
 
-  // Format input as token if it matches pattern
+  // Form handlers
   const formatAsToken = (value: string): string => {
-    // Remove all non-alphanumeric
     const clean = value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-    // Add dashes every 4 characters
     const parts = clean.match(/.{1,4}/g) || [];
     return parts.slice(0, 4).join('-');
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    // If it looks like a token (has dashes or is uppercase), format it
     if (value.includes('-') || (value.length > 0 && value === value.toUpperCase())) {
       setCode(formatAsToken(value));
     } else {
@@ -163,9 +256,7 @@ export default function AccessPage() {
     try {
       const response = await fetch('/api/access', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code }),
       });
 
@@ -173,8 +264,6 @@ export default function AccessPage() {
 
       if (response.ok && data.success) {
         setSuccess(data);
-
-        // Brief delay to show success state, then redirect
         setTimeout(() => {
           router.push(next);
           router.refresh();
@@ -190,123 +279,147 @@ export default function AccessPage() {
     }
   };
 
-  // Focus input on mount
   useEffect(() => {
     const input = document.getElementById('access-code');
     if (input) input.focus();
   }, []);
 
-  // Format expiration time
   const formatExpiry = (expiresAt: string): string => {
-    const date = new Date(expiresAt);
-    const now = new Date();
-    const diffMs = date.getTime() - now.getTime();
+    const diffMs = new Date(expiresAt).getTime() - Date.now();
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-
-    if (diffHours > 24) {
-      return `${Math.floor(diffHours / 24)} days`;
-    } else if (diffHours > 0) {
-      return `${diffHours}h ${diffMins}m`;
-    } else {
-      return `${diffMins} minutes`;
-    }
+    if (diffHours > 24) return `${Math.floor(diffHours / 24)} days`;
+    if (diffHours > 0) return `${diffHours}h ${diffMins}m`;
+    return `${diffMins} minutes`;
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      {/* Animated orbital background */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        {/* Outer static ring */}
-        <div
-          className="absolute top-1/2 left-1/2 w-[600px] h-[600px] rounded-full border border-[var(--foreground)]"
-          style={{
-            opacity: 0.03,
-            transform: 'translate(-50%, -50%)',
-          }}
-        />
-
-        {/* Rotating ring */}
-        <div
-          className="absolute top-1/2 left-1/2 w-[500px] h-[500px] rounded-full border border-dashed border-[var(--foreground)]"
-          style={{
-            opacity: 0.03 + (orbitSpeed * 0.08),
-            transform: 'translate(-50%, -50%)',
-            animation: orbitSpeed > 0.01 ? `orbitSpin ${Math.max(0.4, 25 - (orbitSpeed * 24))}s linear infinite` : 'none',
-          }}
-        />
-
-        {/* Inner counter-rotating ring */}
-        <div
-          className="absolute top-1/2 left-1/2 w-[400px] h-[400px] rounded-full border border-[var(--foreground)]"
-          style={{
-            opacity: 0.02 + (orbitSpeed * 0.05),
-            transform: 'translate(-50%, -50%)',
-            animation: orbitSpeed > 0.01 ? `orbitSpin ${Math.max(0.3, 18 - (orbitSpeed * 17))}s linear infinite reverse` : 'none',
-          }}
-        />
-
-        {/* Orbiting dot */}
-        {orbitSpeed > 0.01 && (
-          <div
-            className="absolute top-1/2 left-1/2 w-[500px] h-[500px]"
-            style={{
-              transform: 'translate(-50%, -50%)',
-              animation: `orbitSpin ${Math.max(0.4, 25 - (orbitSpeed * 24))}s linear infinite`,
-            }}
-          >
-            <div
-              className="absolute top-0 left-1/2 w-2 h-2 rounded-full bg-[var(--foreground)]"
+    <div className="min-h-screen flex items-center justify-center px-4 overflow-hidden">
+      {/* Constellation Background */}
+      <svg className="fixed inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.6 }}>
+        {/* Connection lines */}
+        {CONNECTIONS.map(([from, to], i) => {
+          const n1 = CONSTELLATION_NODES[from];
+          const n2 = CONSTELLATION_NODES[to];
+          const isActive = activeNodes.has(from) || activeNodes.has(to);
+          return (
+            <line
+              key={`conn-${i}`}
+              x1={`${n1.x}%`}
+              y1={`${n1.y}%`}
+              x2={`${n2.x}%`}
+              y2={`${n2.y}%`}
+              stroke="var(--foreground)"
+              strokeWidth={isActive ? 1.5 : 0.5}
               style={{
-                opacity: 0.15 + (orbitSpeed * 0.4),
-                transform: `translateX(-50%) scale(${1 + orbitSpeed * 0.8})`,
-                boxShadow: orbitSpeed > 0.5 ? `0 0 ${orbitSpeed * 20}px rgba(0,0,0,0.1)` : 'none',
+                opacity: 0.05 + (totalEnergy * 0.15) + (isActive ? 0.2 : 0),
+                transition: 'opacity 0.5s, stroke-width 0.3s',
               }}
             />
+          );
+        })}
+
+        {/* Nodes */}
+        {CONSTELLATION_NODES.map((node, i) => {
+          const isActive = activeNodes.has(i);
+          const instIndex = i % INSTRUMENTS.length;
+          const instVolume = volumes[INSTRUMENTS[instIndex].id];
+
+          return (
+            <g key={`node-${i}`}>
+              {/* Glow */}
+              {isActive && (
+                <circle
+                  cx={`${node.x}%`}
+                  cy={`${node.y}%`}
+                  r={node.size * 4}
+                  fill={INSTRUMENTS[instIndex].color}
+                  style={{ opacity: 0.1 }}
+                />
+              )}
+
+              {/* Node */}
+              {node.type === 'jack' ? (
+                <circle
+                  cx={`${node.x}%`}
+                  cy={`${node.y}%`}
+                  r={node.size + (instVolume * 2)}
+                  fill="none"
+                  stroke="var(--foreground)"
+                  strokeWidth={isActive ? 1.5 : 0.5}
+                  style={{
+                    opacity: 0.1 + (instVolume * 0.4) + (isActive ? 0.3 : 0),
+                    transition: 'all 0.3s',
+                  }}
+                />
+              ) : (
+                <rect
+                  x={`${node.x - node.size / 2}%`}
+                  y={`${node.y - node.size / 2}%`}
+                  width={`${node.size + instVolume * 2}%`}
+                  height={`${node.size + instVolume * 2}%`}
+                  fill={isActive ? INSTRUMENTS[instIndex].color : 'var(--foreground)'}
+                  style={{
+                    opacity: 0.08 + (instVolume * 0.3) + (isActive ? 0.4 : 0),
+                    transform: `rotate(45deg)`,
+                    transformOrigin: `${node.x}% ${node.y}%`,
+                    transition: 'all 0.3s',
+                  }}
+                />
+              )}
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* Left Faders - 6 Instruments */}
+      <div className="fixed left-6 top-1/2 -translate-y-1/2 flex flex-col gap-6">
+        {INSTRUMENTS.map((inst) => (
+          <div key={inst.id} className="flex items-center gap-3">
+            {/* Fader */}
+            <div className="relative h-20 w-1 bg-[var(--border)] rounded-full">
+              <div
+                className="absolute bottom-0 w-full rounded-full transition-all duration-100"
+                style={{
+                  height: `${volumes[inst.id] * 100}%`,
+                  backgroundColor: inst.color,
+                  opacity: 0.6,
+                }}
+              />
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={volumes[inst.id]}
+                onChange={(e) => handleVolumeChange(inst.id, parseFloat(e.target.value))}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
+                aria-label={inst.name}
+              />
+            </div>
+            {/* Label */}
+            <span
+              className="label-micro w-8"
+              style={{
+                color: volumes[inst.id] > 0 ? inst.color : 'var(--foreground)',
+                opacity: 0.3 + (volumes[inst.id] * 0.7),
+                transition: 'all 0.2s',
+              }}
+            >
+              {inst.name}
+            </span>
           </div>
-        )}
+        ))}
       </div>
 
-      {/* Keyframes */}
-      <style jsx>{`
-        @keyframes orbitSpin {
-          from { transform: translate(-50%, -50%) rotate(0deg); }
-          to { transform: translate(-50%, -50%) rotate(360deg); }
-        }
-      `}</style>
-
-      {/* Fader control - bottom right */}
-      <div className="fixed bottom-8 right-8 flex flex-col items-center gap-2">
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={orbitSpeed}
-          onChange={handleOrbitChange}
-          className="w-24 h-1 appearance-none bg-[var(--border)] rounded-full cursor-pointer rotate-[-90deg] origin-center"
-          style={{
-            transform: 'rotate(-90deg)',
-            accentColor: 'var(--foreground)',
-          }}
-          aria-label="Orbit speed"
-        />
-        <div
-          className="label-micro mt-8"
-          style={{ opacity: 0.2 + (orbitSpeed * 0.3) }}
-        >
-          {orbitSpeed > 0.01 ? Math.round(orbitSpeed * 100) : '·'}
-        </div>
-      </div>
-
-      <div className="relative w-full max-w-sm">
-        {/* Header */}
+      {/* Main Content */}
+      <div className="relative w-full max-w-sm z-10">
         <div className="text-center mb-12">
           <div className="label-micro mb-2">Lobster Sound</div>
           <h1 className="text-xl font-light tracking-wide">Private Access</h1>
         </div>
 
-        {/* Success State */}
         {success ? (
           <div className="text-center animate-fade-in space-y-4">
             <div className="w-12 h-12 mx-auto border border-[var(--accent)] rounded-full flex items-center justify-center">
@@ -314,25 +427,18 @@ export default function AccessPage() {
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
-
             {success.type === 'token' && (
               <div className="space-y-2">
                 <p className="text-sm opacity-60">{success.label}</p>
-                <p className="label-micro">
-                  Session expires in {formatExpiry(success.expiresAt!)}
-                </p>
+                <p className="label-micro">Session expires in {formatExpiry(success.expiresAt!)}</p>
               </div>
             )}
-
             <p className="label-micro opacity-40 mt-4">Redirecting...</p>
           </div>
         ) : (
-          /* Form */
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="access-code" className="sr-only">
-                Access Code
-              </label>
+              <label htmlFor="access-code" className="sr-only">Access Code</label>
               <input
                 id="access-code"
                 type="text"
@@ -346,13 +452,9 @@ export default function AccessPage() {
                 autoCapitalize="off"
               />
             </div>
-
             {error && (
-              <div className="text-center text-sm opacity-60 animate-fade-in">
-                {error}
-              </div>
+              <div className="text-center text-sm opacity-60 animate-fade-in">{error}</div>
             )}
-
             <button
               type="submit"
               disabled={loading || !code.trim()}
@@ -363,12 +465,9 @@ export default function AccessPage() {
           </form>
         )}
 
-        {/* Footer */}
         {!success && (
           <div className="mt-16 text-center">
-            <p className="label-micro">
-              This app is currently in private preview.
-            </p>
+            <p className="label-micro">This app is currently in private preview.</p>
           </div>
         )}
       </div>
