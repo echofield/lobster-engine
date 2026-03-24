@@ -191,7 +191,7 @@ export default function AccessPage() {
         {!success && (
           <div className="mt-16 text-center">
             <p className="label-micro">
-              This site is currently in private preview.
+              This app is currently in private preview.
             </p>
           </div>
         )}
