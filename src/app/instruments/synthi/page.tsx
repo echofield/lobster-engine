@@ -674,7 +674,7 @@ export default function SynthiPage() {
           className="text-[10px] uppercase tracking-[0.15em] opacity-40 hover:opacity-100 transition-opacity"
           style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
         >
-          ← Home
+          {'\u2190'} Home
         </Link>
       </div>
 
@@ -685,7 +685,7 @@ export default function SynthiPage() {
           className="text-[10px] uppercase tracking-[0.15em] opacity-40 hover:opacity-100 transition-opacity"
           style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
         >
-          {themeMode === 'day' ? '◐ night' : '○ day'}
+          {themeMode === 'day' ? '\u25D0 night' : '\u25CB day'}
         </button>
         {/* Poly/Mono toggle */}
         <button
@@ -699,16 +699,17 @@ export default function SynthiPage() {
         >
           {isPolyphonic ? 'poly' : 'mono'}
         </button>
-        {/* Space-Time toggle */}
+        {/* Space-Time toggle (low-key) */}
         <button
           onClick={toggleSpaceTime}
-          className="text-[10px] uppercase tracking-[0.15em] transition-opacity"
+          title="Space-Time"
+          className="text-[9px] uppercase tracking-[0.08em] transition-opacity"
           style={{
-            color: spaceTimeEnabled ? '#00ff88' : (themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)'),
-            opacity: spaceTimeEnabled ? 1 : 0.4
+            color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)',
+            opacity: spaceTimeEnabled ? 0.55 : 0.2
           }}
         >
-          {spaceTimeEnabled ? '◉ ST' : '○ ST'}
+          st
         </button>
         {/* Creator Mode */}
         <button
@@ -819,7 +820,7 @@ export default function SynthiPage() {
                 className="text-[10px] uppercase tracking-[0.1em] font-medium"
                 style={{ color: spaceTimeResult.allowed ? '#00ff88' : '#ff4444' }}
               >
-                {spaceTimeResult.allowed ? '● Unlocked' : '○ Locked'}
+                {spaceTimeResult.allowed ? '\u25CF Unlocked' : '\u25CB Locked'}
               </div>
 
               {!spaceTimeResult.allowed && spaceTimeResult.reason && (
@@ -924,7 +925,7 @@ export default function SynthiPage() {
                   color: isPlaying ? (themeMode === 'night' ? '#000' : '#fff') : '#7C5CFF'
                 }}
               >
-                {isPlaying ? '■' : '▶'}
+                {isPlaying ? '\u25A0' : '\u25B6'}
               </button>
 
               {/* Parameter sliders */}
@@ -993,7 +994,7 @@ export default function SynthiPage() {
                     color: isRecording ? '#fff' : '#7C5CFF'
                   }}
                 >
-                  {isRecording ? '■' : '●'}
+                  {isRecording ? '\u25A0' : '\u25CF'}
                 </button>
                 <div className="flex flex-col gap-1">
                   <div className="flex gap-1">
@@ -1067,7 +1068,7 @@ export default function SynthiPage() {
           className="text-[9px] uppercase tracking-[0.1em] opacity-30"
           style={{ color: themeMode === 'night' ? '#7C5CFF' : 'var(--foreground)' }}
         >
-          Click to play • Mouse to modulate • MIDI + Clock sync • Record to WAV
+          {'Click to play \u2022 Mouse to modulate \u2022 MIDI + Clock sync \u2022 Record to WAV'}
         </p>
       </div>
 

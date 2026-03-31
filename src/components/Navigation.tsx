@@ -1,14 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useLanguage } from './LanguageProvider';
 import { LanguageToggle } from './LanguageToggle';
 import { clsx } from 'clsx';
 
 const navItems = [
-  { href: '/gear', labelFr: 'Équipement', labelEn: 'Gear' },
-  { href: '/chains', labelFr: 'Chaînes', labelEn: 'Chains' },
+  { href: '/gear', labelFr: '\u00C9quipement', labelEn: 'Gear' },
+  { href: '/chains', labelFr: 'Cha\u00EEnes', labelEn: 'Chains' },
   { href: '/aether', labelFr: 'Aether', labelEn: 'Aether' },
   { href: '/vapor', labelFr: 'Vapor', labelEn: 'Vapor' },
   { href: '/instruments/ritual', labelFr: 'Ritual', labelEn: 'Ritual' },
@@ -19,23 +19,12 @@ const navItems = [
   { href: '/instruments/aetherkey', labelFr: 'Aether.Key', labelEn: 'Aether.Key' },
   { href: '/instruments/flowmind', labelFr: 'Flow.Mind', labelEn: 'Flow.Mind' },
   { href: '/patchbay', labelFr: 'Patchbay', labelEn: 'Patchbay' },
-  { href: '/generative', labelFr: 'Génératif', labelEn: 'Generative' },
+  { href: '/generative', labelFr: 'G\u00E9n\u00E9ratif', labelEn: 'Generative' },
 ];
 
 export function Navigation() {
   const pathname = usePathname();
-  const router = useRouter();
   const { language } = useLanguage();
-
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/logout', { method: 'POST' });
-      router.push('/access');
-      router.refresh();
-    } catch {
-      window.location.href = '/access';
-    }
-  };
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 h-14 px-6 flex items-center justify-between bg-[var(--background)]">
@@ -71,17 +60,6 @@ export function Navigation() {
         <Link href="/guide" className="nav-link">
           Guide
         </Link>
-        <button
-          onClick={handleLogout}
-          className="nav-link cursor-pointer border-none bg-transparent"
-          title="Logout"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
-        </button>
       </div>
     </nav>
   );
